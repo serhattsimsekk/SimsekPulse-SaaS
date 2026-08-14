@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 DATA_DIR = r'C:\LOJISTIK_SISTEMI'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
-
+DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(DATA_DIR, 'saha_operasyon.db')
 
 st.set_page_config(
