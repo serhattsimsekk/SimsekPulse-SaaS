@@ -13,7 +13,7 @@ DB_NAME = os.path.join(DATA_DIR, 'saha_operasyon.db')
 
 # --- SAYFA YAPILANDIRMASI ---
 st.set_page_config(
-    page_title="SimsekPulse SaaS | Ultimate Fleet & Driver Intelligence",
+    page_title="SimsekPulse Pro | Fleet & Dispatch Command Center",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -22,45 +22,112 @@ st.set_page_config(
 # 10 Saniyede Bir Otomatik Yenileme
 st_autorefresh(interval=10000, key="cloud_refresh")
 
-# --- ÖZEL EXECUTIVE DARK THEME & RENKLENDİRME CSS ---
+# --- ÖZEL VIP EXECUTIVE & EXCEL STİLİ CSS ---
 st.markdown("""
     <style>
     .main { background-color: #080c14; }
     div[data-testid="stMetricValue"] { font-size: 26px !important; font-weight: 800; color: #38bdf8; }
     div[data-testid="stMetricLabel"] { font-size: 13px !important; color: #94a3b8; font-weight: 600; }
     .stDataFrame { border: 1px solid #1e293b; border-radius: 10px; }
-    .status-card {
-        background: #0f172a;
-        border-left: 5px solid #38bdf8;
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 12px;
+    
+    /* EXCEL MATRİS STİLLERİ */
+    .excel-header-banner {
+        background: #1e293b;
+        color: #f8fafc;
+        padding: 10px 15px;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 14px;
+        text-align: right;
+        border-bottom: 3px solid #0284c7;
+        margin-bottom: 15px;
     }
+    .excel-col-box {
+        background-color: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+    .excel-col-title {
+        background-color: #1e293b;
+        color: #f1f5f9;
+        padding: 8px;
+        font-size: 12px;
+        font-weight: bold;
+        text-align: center;
+        border-radius: 4px;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #475569;
+    }
+    .excel-count-ozmal {
+        background-color: #1e3a8a;
+        color: #93c5fd;
+        font-weight: bold;
+        font-size: 13px;
+        text-align: center;
+        padding: 4px;
+        margin-top: 4px;
+        border-radius: 4px;
+    }
+    .excel-count-destek {
+        background-color: #7f1d1d;
+        color: #fca5a5;
+        font-weight: bold;
+        font-size: 13px;
+        text-align: center;
+        padding: 4px;
+        margin-top: 2px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+    }
+    .plate-pill {
+        padding: 5px 8px;
+        margin-bottom: 4px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 12px;
+        text-align: center;
+        color: #ffffff;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    .pill-green { background-color: #16a34a; }
+    .pill-blue { background-color: #2563eb; }
+    .pill-purple { background-color: #9333ea; }
+    .pill-cyan { background-color: #0891b2; }
+    .pill-orange { background-color: #ea580c; }
+    .pill-gray { background-color: #4b5563; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE İLE DİNAMİK ÖZ MAL GARAJ ENVANTERİ ---
+# --- TÜM DORSE VE EKİPMAN TİPLERİ ---
+DORSE_VE_EKIPMAN_TIPLERI = [
+    "🏗️ Junior Dorse (Hurda)",
+    "🏗️ Uzun Dorse (Hurda)",
+    "🌊 Havuz Dorse",
+    "🪗 Akordiyon Dorse",
+    "📐 Sal Babalı Dorse",
+    "📐 Sal Düz Dorse",
+    "📦 20'lik Kılçık Dorse",
+    "📦 40'lık Kılçık Dorse",
+    "🌾 Kuru Yük Dorsesi",
+    "🚪 Kapaklı Dorse",
+    "🚚 Kamyon (Kırkayak / Onteker)",
+    "🚜 İş Makinesi (Loder / Ekskavatör / Vinç)"
+]
+
+# --- SESSION STATE (GARAJ ENVANTERİ VE DEĞİŞİKLİKLER) ---
 if 'ozmal_garaj' not in st.session_state:
-    st.session_state.ozmal_garaj = [
-        {"Plaka": "31AOV941", "Asıl_Şoför": "Ahmet Yılmaz", "Dorse": "🏗️ Damper Dorse (Hurda/Dökme)", "Durum": "🟢 Aktif Envanter"},
-        {"Plaka": "31ANK278", "Asıl_Şoför": "Mehmet Kaya", "Dorse": "📐 Kapaklı/Sal Dorse (Kütük/Sac)", "Durum": "🟢 Aktif Envanter"},
-        {"Plaka": "31K3200",  "Asıl_Şoför": "Mustafa Demir", "Dorse": "🏗️ Damper Dorse (Hurda/Dökme)", "Durum": "🟢 Aktif Envanter"},
-        {"Plaka": "31P888",   "Asıl_Şoför": "Hasan Şahin", "Dorse": "🚜 Lowbed/Platform (Ağır Yük)", "Durum": "🟢 Aktif Envanter"},
-        {"Plaka": "31AGH102", "Asıl_Şoför": "Ali Öztürk", "Dorse": "📦 Konteyner Şasi", "Durum": "🟢 Aktif Envanter"}
-    ]
+    st.session_state.ozmal_garaj = []
 
-# --- TEDARİKÇİ & SPOT ARAÇ BİLİŞİM HARİTASI ---
-TEDARIKCI_DORSE_HARITASI = {
-    "31K8900": {"Filo": "🟧 Sözleşmeli Tedarikçi (Öz-İş)", "Dorse": "🏗️ Damper Dorse (Hurda/Dökme)"},
-    "31K7100": {"Filo": "🟧 Sözleşmeli Tedarikçi (Öz-İş)", "Dorse": "📐 Kapaklı/Sal Dorse (Kütük/Sac)"},
-    "31P900":  {"Filo": "🟣 Spot Taşeron", "Dorse": "🏗️ Damper Dorse (Hurda/Dökme)"},
-    "31AG110": {"Filo": "🟣 Spot Taşeron", "Dorse": "📐 Kapaklı/Sal Dorse (Kütük/Sac)"},
-    "31K5500": {"Filo": "🟣 Spot Taşeron", "Dorse": "📦 Konteyner Şasi"}
-}
-
-# --- GÜNLÜK YEDEK / GEÇİCİ ŞOFÖR DEĞİŞİKLİK DİZİNİ ---
 if 'sofor_degisiklikleri' not in st.session_state:
     st.session_state.sofor_degisiklikleri = {}
+
+if 'vardiya_amiri' not in st.session_state:
+    st.session_state.vardiya_amiri = "SİNAN GÜL // MUSTAFA ÇETİN"
 
 # --- HELPER FONKSİYONLAR ---
 def operasyonel_tarih_hesapla(dt_val):
@@ -79,34 +146,28 @@ def sofor_bul(op_tarih, plaka):
     plk = str(plaka).replace(' ', '').upper()
     key = f"{op_tarih}_{plk}"
     
-    # 1. Geçici / Yedek Şoför Bindi mi?
     if key in st.session_state.sofor_degisiklikleri:
         return f"🔄 {st.session_state.sofor_degisiklikleri[key]}"
     
-    # 2. Sabit Asıl Şoför Kim?
     for item in st.session_state.ozmal_garaj:
         if item["Plaka"] == plk:
-            return f"👤 {item['Asıl_Şoför']}"
+            return f"👤 {item.get('Asıl_Şoför', 'Tanımsız')}"
             
     return "🚚 Taşeron / Tanımsız Şoför"
 
 def filo_kategorisi_bul(plaka):
     plk = str(plaka).replace(' ', '').upper()
-    aktif_ozmal_plakalar = [item["Plaka"] for item in st.session_state.ozmal_garaj if item["Durum"] == "🟢 Aktif Envanter"]
+    aktif_ozmal_plakalar = [item["Plaka"] for item in st.session_state.ozmal_garaj if item.get("Durum") == "🟢 Aktif Envanter"]
     if plk in aktif_ozmal_plakalar:
         return '🟢 Öz Mal Filo'
-    elif plk in TEDARIKCI_DORSE_HARITASI:
-        return TEDARIKCI_DORSE_HARITASI[plk]["Filo"]
     else:
-        return '⚪ Diğer Taşeron'
+        return '🟣 Dış Taşeron / Tedarikçi'
 
 def dorse_tipi_bul(plaka):
     plk = str(plaka).replace(' ', '').upper()
     for item in st.session_state.ozmal_garaj:
         if item["Plaka"] == plk:
-            return item["Dorse"]
-    if plk in TEDARIKCI_DORSE_HARITASI:
-        return TEDARIKCI_DORSE_HARITASI[plk]["Dorse"]
+            return item.get("Dorse_Tipi", "🚛 Standart Dorse")
     return "🚛 Standart Dorse"
 
 def verileri_yukle():
@@ -140,14 +201,13 @@ def verileri_yukle():
         df['seferler_arasi_dk'] = (df['giris_dt'] - df['onceki_cikis_dt']).dt.total_seconds() / 60.0
         df.loc[df['seferler_arasi_dk'] < 0, 'seferler_arasi_dk'] = np.nan
 
-        # ŞOFÖR BİLGİSİ
         df['Aktif_Şoför'] = df.apply(lambda r: sofor_bul(r['op_tarih'], r['plaka_clean']), axis=1)
 
     return df
 
-# --- BAŞLIK ALANI ---
-st.title("⚡ SimsekPulse Pro | Ultimate Fleet, Driver & ERP Intelligence")
-st.caption("🌐 24 Saatlik Otomatik Karne, Renk Kodlu Tedarikçi/Dorse Matrisi & Öz Mal Garaj ERP")
+# --- BAŞLIK ---
+st.title("⚡ SimsekPulse Pro | Fleet, Dispatch & ERP Intelligence")
+st.caption("🌐 Canlı Excel Matris Sevkiyat Tablosu, Çoklu Araç Ekleme & Vardiya Yönetimi")
 st.markdown("---")
 
 df = verileri_yukle()
@@ -160,13 +220,73 @@ else:
     f_df = df[df['op_tarih'] == secilen_tarih]
 
     # SEKMELER
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab_excel, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📋 GÜNCEL SEVKİYAT (Excel Matris)",
         "📊 24 Saatlik Şoför Karnesi", 
         "🎨 Tedarikçi & Dorse Renk Matrisi", 
+        "🏛️ Öz Mal Garaj & Toplu Ekleme", 
         "🔄 Vardiya Şoför Değişimi", 
-        "🏛️ Öz Mal Garaj & Demirbaş ERP", 
         "💰 Finans & Hak Ediş"
     ])
+
+    # -------------------------------------------------------------
+    # TAB 0: GÜNCEL SEVKİYAT (EXCEL MATRİS SÜTÜNLARI - YENİ MODÜL!)
+    # -------------------------------------------------------------
+    with tab_excel:
+        # VARDİYA AMİRİ BANNERI
+        col_am1, col_am2 = st.columns([2, 1])
+        with col_am1:
+            st.markdown(f"""
+                <div class="excel-header-banner">
+                    📋 {secilen_tarih} VARDİYA AMİRLERİ: {st.session_state.vardiya_amiri}
+                </div>
+            """, unsafe_allow_html=True)
+        with col_am2:
+            yeni_amirlerr = st.text_input("✏️ Vardiya Amirlerini Güncelle:", st.session_state.vardiya_amiri)
+            if yeni_amirlerr != st.session_state.vardiya_amiri:
+                st.session_state.vardiya_amiri = yeni_amirlerr
+                st.rerun()
+
+        if not f_df.empty:
+            # Tesis / Gemi Listesi
+            tesisler = sorted(f_df['bosaltma_yeri'].dropna().unique().tolist())
+            
+            if not tesisler:
+                tesisler = f_df['gemi_adi'].dropna().unique().tolist()
+
+            # Renk Paleti Döngüsü
+            renk_siniflari = ['pill-green', 'pill-blue', 'pill-cyan', 'pill-purple', 'pill-orange', 'pill-gray']
+
+            # Streamlit Sütunları
+            cols = st.columns(len(tesisler) if len(tesisler) > 0 else 1)
+
+            for idx, tesis_adi in enumerate(tesisler):
+                tesis_df = f_df[f_df['bosaltma_yeri'] == tesis_adi]
+                
+                plakalar = tesis_df['plaka_clean'].unique().tolist()
+                
+                # Öz mal ve destek sayımı
+                ozmal_count = len(tesis_df[tesis_df['filo_kategorisi'] == '🟢 Öz Mal Filo']['plaka_clean'].unique())
+                destek_count = len(plakalar) - ozmal_count
+
+                with cols[idx % len(cols)]:
+                    # Sütun Başlığı ve Sayım Kutuları
+                    st.markdown(f"""
+                        <div class="excel-col-box">
+                            <div class="excel-col-title">{tesis_adi}</div>
+                            <div class="excel-count-ozmal">ÖZ MAL (FİLO): {ozmal_count}</div>
+                            <div class="excel-count-destek">DESTEK (DİŞ): {destek_count}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    # Plaka Listesi (Renk Bloklu)
+                    for p_idx, plk in enumerate(plakalar):
+                        color_cls = renk_siniflari[p_idx % len(renk_siniflari)]
+                        st.markdown(f"""
+                            <div class="plate-pill {color_cls}">
+                                {plk}
+                            </div>
+                        """, unsafe_allow_html=True)
 
     # -------------------------------------------------------------
     # TAB 1: 24 SAATLİK ŞOFÖR KARNESİ
@@ -182,118 +302,107 @@ else:
                 Ort_Bekleme_Dk=('seferler_arasi_dk', 'mean')
             ).reset_index().sort_values(by='Toplam_Tonaj', ascending=False)
 
-            karne_df.columns = ['Plaka', 'Filo Aidiyeti', 'Dorse Tipi', 'Direksiyondaki Şoför', 'Sefer Sayısı', 'Toplam Tonaj', 'Ort. Tur Süresi (Dk)', 'Ort. Bekleme (Dk)']
+            karne_df.columns = ['Plaka / Ekipman', 'Filo Aidiyeti', 'Dorse / Araç Tipi', 'Direksiyondaki Şoför / Operatör', 'Sefer Sayısı', 'Toplam Tonaj', 'Ort. Tur Süresi (Dk)', 'Ort. Bekleme (Dk)']
 
-            # KPI KARTLARI
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("📊 Günlük Toplam Tonaj", f"{f_df['net_tonaj'].sum():,.2f} Ton")
             c2.metric("🚛 Toplam Attığı Sefer", f"{len(f_df)} Sefer")
-            c3.metric("🛞 Sahadaki Aktif Tır", f"{f_df['plaka_clean'].nunique()} Tır")
-            c4.metric("👨‍✈️ Aktif Şoför Sayısı", f"{f_df['Aktif_Şoför'].nunique()} Kişi")
+            c3.metric("🛞 Sahadaki Aktif Ekipman", f"{f_df['plaka_clean'].nunique()} Birim")
+            c4.metric("👨‍✈️ Aktif Şoför / Operatör", f"{f_df['Aktif_Şoför'].nunique()} Kişi")
 
             st.markdown("---")
             st.dataframe(karne_df, use_container_width=True, height=350)
-
-            col_p1, col_p2 = st.columns(2)
-            with col_p1:
-                fig_sofor = px.bar(karne_df, x='Direksiyondaki Şoför', y='Toplam Tonaj', color='Filo Aidiyeti', text_auto='.1f', title="Şoför Bazlı Toplam Taşınan Tonaj")
-                fig_sofor.update_layout(template="plotly_dark", height=320)
-                st.plotly_chart(fig_sofor, use_container_width=True)
-
-            with col_p2:
-                fig_sure = px.bar(karne_df, x='Direksiyondaki Şoför', y='Ort. Tur Süresi (Dk)', color='Ort. Tur Süresi (Dk)', color_continuous_scale='Reds', title="Şoför Bazlı Ortalama Tur Süresi")
-                fig_sure.update_layout(template="plotly_dark", height=320)
-                st.plotly_chart(fig_sure, use_container_width=True)
 
     # -------------------------------------------------------------
     # TAB 2: TEDARİKÇİ & DORSE RENK MATRİSİ
     # -------------------------------------------------------------
     with tab2:
-        st.subheader("🎨 Çift Katmanlı Renk Matrisi: Tedarikçi & Dorse Tipi Dağılımı")
+        st.subheader("🎨 Tedarikçi & Dorse Tipi Görsel Dağılım Matrisi")
         
         if not f_df.empty:
             renkli_df = f_df.sort_values('giris_dt').groupby('plaka_clean').last().reset_index()
             renkli_df = renkli_df[['plaka_clean', 'filo_kategorisi', 'dorse_tipi', 'Aktif_Şoför', 'gemi_adi', 'tesis', 'bosaltma_yeri', 'net_tonaj']]
-            renkli_df.columns = ['Plaka', 'Filo Sınıfı', '🚛 Dorse Tipi', 'Görevli Şoför', 'Aktif Gemi', 'Yükleme Tesis', 'Boşaltma Yeri', 'Son Tonaj']
+            renkli_df.columns = ['Plaka / Ekipman', 'Filo Sınıfı', '🚛 Dorse / Araç Tipi', 'Görevli Şoför', 'Aktif Gemi', 'Yükleme Tesis', 'Boşaltma Yeri', 'Son Tonaj']
 
             st.dataframe(renkli_df, use_container_width=True, height=350)
 
-            col_r1, col_r2 = st.columns(2)
-            with col_r1:
-                fig_ted = px.pie(f_df, names='filo_kategorisi', values='net_tonaj', hole=0.4, title="Filo Aidiyeti Tonaj Payı",
-                                 color_discrete_map={'🟢 Öz Mal Filo': '#10b981', '🟧 Sözleşmeli Tedarikçi (Öz-İş)': '#f59e0b', '🟣 Spot Taşeron': '#8b5cf6'})
-                fig_ted.update_layout(template="plotly_dark", height=300)
-                st.plotly_chart(fig_ted, use_container_width=True)
-
-            with col_r2:
-                fig_dor = px.pie(f_df, names='dorse_tipi', values='net_tonaj', hole=0.4, title="Dorse Tipleri Tonaj Payı",
-                                 color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig_dor.update_layout(template="plotly_dark", height=300)
-                st.plotly_chart(fig_dor, use_container_width=True)
-
     # -------------------------------------------------------------
-    # TAB 3: VARDİYA ŞOFÖR DEĞİŞİMİ
+    # TAB 3: ÖZ MAL GARAJ & TOPLU EKLEME
     # -------------------------------------------------------------
     with tab3:
-        st.subheader("🔄 Günlük Vardiya Şoför Değişim Formu (Geçici / Yedek Şoför)")
+        st.subheader("🏛️ Öz Mal Garaj Envanteri & Toplu Araç/Ekipman Ekleme")
+        
+        garaj_df = pd.DataFrame(st.session_state.ozmal_garaj) if st.session_state.ozmal_garaj else pd.DataFrame(columns=["Plaka", "Asıl_Şoför", "Dorse_Tipi", "Araç_Tipi", "Durum"])
+        toplam_ozmal = len(garaj_df[garaj_df['Durum'] == '🟢 Aktif Envanter']) if not garaj_df.empty else 0
+        
+        c_m1, c_m2 = st.columns(2)
+        c_m1.metric("🏛️ Garajdaki Toplam Öz Mal Ekipman", f"{toplam_ozmal} Birim")
+        
+        st.markdown("---")
+        
+        col_g1, col_g2 = st.columns([1, 1])
+
+        with col_g1:
+            st.write("📋 **Garajdaki Mevcut Öz Mal Listesi:**")
+            st.dataframe(garaj_df, use_container_width=True, height=320)
+
+        with col_g2:
+            st.write("📋 **Toplu Araç / Ekipman Ekleme:**")
+            with st.form("toplu_arac_formu"):
+                toplu_plakalar = st.text_area("Plakaları Alt Alta Yazın:", height=120)
+                secilen_dorse = st.selectbox("Dorse / Ekipman Tipi:", DORSE_VE_EKIPMAN_TIPLERI)
+                secilen_arac_tipi = st.selectbox("Araç Tipi:", ["🚛 Çekici / Tır", "🚚 Kamyon (Kırkayak/Onteker)", "🚜 İş Makinesi"])
+                varsayilan_sofor = st.text_input("Ortak / Varsayılan Şoför-Operatör:", "Tanımsız")
+                
+                toplu_btn = st.form_submit_button("➕ Toplu Olarak Garaja Ekle")
+                
+                if toplu_btn and toplu_plakalar.strip():
+                    plaka_listesi = [p.strip().upper() for p in toplu_plakalar.split('\n') if p.strip()]
+                    eklenen_sayi = 0
+                    for plk in plaka_listesi:
+                        if not any(item['Plaka'] == plk for item in st.session_state.ozmal_garaj):
+                            st.session_state.ozmal_garaj.append({
+                                "Plaka": plk,
+                                "Asıl_Şoför": varsayilan_sofor,
+                                "Dorse_Tipi": secilen_dorse,
+                                "Araç_Tipi": secilen_arac_tipi,
+                                "Durum": "🟢 Aktif Envanter"
+                            })
+                            eklenen_sayi += 1
+                    st.success(f"✅ Toplam {eklenen_sayi} adet araç/ekipman Öz Mal garajına eklendi!")
+                    st.rerun()
+
+    # -------------------------------------------------------------
+    # TAB 4: VARDİYA ŞOFÖR DEĞİŞİMİ
+    # -------------------------------------------------------------
+    with tab4:
+        st.subheader("🔄 Günlük Vardiya Şoför / Operatör Değişim Formu")
         
         col_d1, col_d2 = st.columns([1, 1])
         with col_d1:
             with st.form("sofor_degisim_formu"):
                 tarih_degisim = st.selectbox("📅 İşlem Yapılacak Tarih:", tarihler)
-                aktif_plakalar = [item["Plaka"] for item in st.session_state.ozmal_garaj if item["Durum"] == "🟢 Aktif Envanter"]
-                secilen_plaka = st.selectbox("🚛 Araç Seçin:", aktif_plakalar)
-                yeni_sofor_adi = st.text_input("👨‍✈️ Direksiyona Geçen Şoför:", "Kemal Yıldız (Yedek)")
+                aktif_plakalar = f_df['plaka_clean'].unique().tolist()
+                
+                secilen_plaka = st.selectbox("🚛 Araç / Ekipman Seçin:", aktif_plakalar)
+                yeni_sofor_adi = st.text_input("👨‍✈️ O Günkü Şoför / Operatör:", "Ahmet Yılmaz (Yedek)")
                 sebep = st.selectbox("📌 Sebep:", ["İzinli Asıl Şoför", "Hastalık / Rapor", "Çift Vardiya Değişimi", "Geçici Görev"])
 
-                degistir_btn = st.form_submit_button("💾 Günlük Şoför Değişikliğini Kaydet")
+                degistir_btn = st.form_submit_button("💾 Şoför / Operatör Kaydını Güncelle")
                 if degistir_btn:
                     key = f"{tarih_degisim}_{secilen_plaka}"
                     st.session_state.sofor_degisiklikleri[key] = f"{yeni_sofor_adi} [{sebep}]"
-                    st.success(f"✅ {secilen_plaka} için {tarih_degisim} tarihinde şoför '{yeni_sofor_adi}' olarak güncellendi!")
+                    st.success(f"✅ {secilen_plaka} için {tarih_degisim} tarihinde personel '{yeni_sofor_adi}' olarak güncellendi!")
                     st.rerun()
 
         with col_d2:
-            st.write("📋 **Oluşturulan Geçici Şoför Kayıtları:**")
+            st.write("📋 **Oluşturulan Geçici Değişim Kayıtları:**")
             if st.session_state.sofor_degisiklikleri:
                 degisim_list = []
                 for k, v in st.session_state.sofor_degisiklikleri.items():
                     t, p = k.split('_')
-                    degisim_list.append({"Tarih": t, "Plaka": p, "Geçici Şoför": v})
+                    degisim_list.append({"Tarih": t, "Plaka": p, "Geçici Şoför/Operatör": v})
                 st.dataframe(pd.DataFrame(degisim_list), use_container_width=True, height=280)
-
-    # -------------------------------------------------------------
-    # TAB 4: ÖZ MAL GARAJ & DEMİRBAŞ ERP
-    # -------------------------------------------------------------
-    with tab4:
-        st.subheader("🏛️ Şirket Öz Mal Garaj Envanteri (Ekle / Sat)")
-        
-        garaj_df = pd.DataFrame(st.session_state.ozmal_garaj)
-        toplam_ozmal_sayisi = len(garaj_df[garaj_df['Durum'] == '🟢 Aktif Envanter'])
-        aktif_ozmal_sahada = f_df[f_df['filo_kategorisi'] == '🟢 Öz Mal Filo']['plaka_clean'].nunique()
-        verimlilik_yuzdesi = (aktif_ozmal_sahada / toplam_ozmal_sayisi) * 100.0 if toplam_ozmal_sayisi > 0 else 0
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("🏛️ Garajdaki Öz Mal Tır", f"{toplam_ozmal_sayisi} Araç")
-        m2.metric("🟢 Sahada Çalışan Öz Mal", f"{aktif_ozmal_sahada} Araç")
-        m3.metric("⚡ SAF ÖZ MAL VERİMİ", f"%{verimlilik_yuzdesi:.1f}")
-
-        st.markdown("---")
-        col_g1, col_g2 = st.columns([2, 1])
-        with col_g1:
-            st.write("📋 **Öz Mal Envanter & Sabit Şoför Zimmet Listesi:**")
-            st.dataframe(garaj_df, use_container_width=True, height=280)
-
-        with col_g2:
-            with st.form("yeni_arac_form"):
-                y_plk = st.text_input("Ruhsat Plakası:", "31K9000").upper()
-                y_sofor = st.text_input("Zimmetli Asıl Şoför:", "Osman Can")
-                y_dorse = st.selectbox("Dorse Tipi:", ["🏗️ Damper Dorse", "📐 Kapaklı/Sal Dorse", "🚜 Lowbed/Platform", "📦 Konteyner Şasi"])
-                ekle_btn = st.form_submit_button("💾 Filoya Kat (Garaja Ekle)")
-                if ekle_btn:
-                    st.session_state.ozmal_garaj.append({"Plaka": y_plk, "Asıl_Şoför": y_sofor, "Dorse": y_dorse, "Durum": "🟢 Aktif Envanter"})
-                    st.success(f"✅ {y_plk} Öz Mal envanterine eklendi!")
-                    st.rerun()
 
     # -------------------------------------------------------------
     # TAB 5: FİNANS VE HAK EDİŞ
