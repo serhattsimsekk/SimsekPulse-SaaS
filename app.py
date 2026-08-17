@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+from datetime import datetime
 
-# 1. EN ÜSTTE SAYFA YAPILANDIRMASI
+# 1. SAYFA YAPILANDIRMASI
 st.set_page_config(
     page_title="Şimşek Lojistik | Canlı Sevkiyat Matrisi",
     page_icon="⚡",
@@ -11,16 +12,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. TAM KURUMSAL ARAYÜZ VE SIFIR ROZET CSS ENJEKSİYONU
+# 2. KURUMSAL ARAYÜZ VE SIFIR ROZET CSS ENJEKSİYONU
 st.markdown("""
 <style>
-    /* Üst Menü, Header, Footer ve Toolbar Gizleme */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
     }
     
-    /* Sağ Alttaki Profil İkonu, GitHub ve Streamlit Rozetlerini Tamamen Yok Etme */
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
     [data-testid="stToolbar"],
@@ -36,7 +35,6 @@ st.markdown("""
         pointer-events: none !important;
     }
 
-    /* Sayfa Arka Planı ve Yerleşim Optimization */
     .stApp {
         background-color: #0b1329 !important;
         color: #f8fafc;
@@ -46,7 +44,6 @@ st.markdown("""
         max-width: 100% !important;
     }
 
-    /* Top Bar Header */
     .excel-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 1px solid #334155;
@@ -58,7 +55,6 @@ st.markdown("""
         align-items: center;
     }
 
-    /* Dynamic Counter Cards */
     .counter-card {
         background: #1e293b;
         border: 1px solid #334155;
@@ -126,8 +122,11 @@ init_db()
 if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
-# 4. ÜST PANEL & İSTATİSTİKLER
+# 4. ÜST PANEL & İSTATİSTİKLER (OTOMATİK CANLI TARİH)
 df_current = st.session_state.df_matris
+
+# Güncel Tarih Formatı (GG.AA.YYYY)
+bugun_tarih = datetime.now().strftime("%d.%m.%Y")
 
 count_mmk = df_current['hat1_ozel'].replace('', None).count() + df_current['hat2_genel'].replace('', None).count()
 count_eyap = df_current['eyap_silis'].replace('', None).count()
@@ -135,14 +134,14 @@ count_guub = df_current['guub_cimento'].replace('', None).count()
 count_isken = df_current['isken_komur'].replace('', None).count()
 count_tosyali = df_current['tosyali_cevher'].replace('', None).count()
 
-st.markdown("""
+st.markdown(f"""
 <div class="excel-header">
     <div>
         <h3 style="margin:0; color:#38bdf8;">⚡ ŞİMŞEK LOJİSTİK — OTOMASYONLU SEVKİYAT MATRİSİ</h3>
         <span style="color:#94a3b8; font-size:0.85rem;">Veritabanı Entegreli Canlı Hücre Editörü</span>
     </div>
     <div style="text-align:right; color:#34d399; font-weight:600;">
-        ● CANLI SİSTEM (12.08.2026)
+        ● CANLI SİSTEM ({bugun_tarih})
     </div>
 </div>
 """, unsafe_allow_html=True)
