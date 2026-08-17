@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
 from datetime import datetime
 
-# 1. SAYFA YAPILANDIRMASI
+# 1. EN ÜSTTE SAYFA YAPILANDIRMASI
 st.set_page_config(
-    page_title="Şimşek Lojistik | Canlı Sevkiyat Matrisi",
+    page_title="Şimşek Lojistik | Veritabanı Entegreli Saha Matrisi",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. KURUMSAL CSS + TARAYICI SAĞ TIKINI ENGELLEYİP EXCEL MENÜSÜ AÇAN JS ENJEKSİYONU
+# 2. TAM KURUMSAL ARAYÜZ VE TEMİZLİK (CSS)
 st.markdown("""
 <style>
     /* Streamlit Menü ve Rozet Temizliği */
@@ -45,6 +44,7 @@ st.markdown("""
         max-width: 100% !important;
     }
 
+    /* Header Banner */
     .excel-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 1px solid #334155;
@@ -56,6 +56,7 @@ st.markdown("""
         align-items: center;
     }
 
+    /* Sayaç Kartları */
     .counter-card {
         background: #1e293b;
         border: 1px solid #334155;
@@ -64,88 +65,28 @@ st.markdown("""
         text-align: center;
     }
 
-    /* ÖZEL EXCEL SAĞ TIK MENÜ STİLİ */
-    #excel-context-menu {
-        display: none;
-        position: fixed;
-        z-index: 999999;
-        width: 200px;
-        background-color: #1e293b;
-        border: 1px solid #475569;
+    /* Tab Tasarımı */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #0f172a;
+        padding: 6px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
         border-radius: 8px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-        padding: 6px 0;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-size: 13px;
-        color: #f8fafc;
+        color: #94a3b8;
+        font-weight: 600;
     }
-    #excel-context-menu ul {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-    #excel-context-menu li {
-        padding: 8px 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        transition: background 0.15s ease;
-    }
-    #excel-context-menu li:hover {
-        background-color: #0284c7;
-        color: #ffffff;
-    }
-    .menu-divider {
-        height: 1px;
-        background-color: #334155;
-        margin: 4px 0;
+    .stTabs [aria-selected="true"] {
+        background-color: #0284c7 !important;
+        color: #ffffff !important;
     }
 </style>
-
-<!-- ÖZEL EXCEL SAĞ TIK MENÜSÜ HTML -->
-<div id="excel-context-menu">
-    <ul>
-        <li onclick="alert('Kopyalamak için hücreyi seçip Ctrl+C tuşlarını kullanabilirsiniz.')">✂️ Kes</li>
-        <li onclick="alert('Kopyalamak için hücreyi seçip Ctrl+C tuşlarını kullanabilirsiniz.')">📋 Kopyala (Ctrl+C)</li>
-        <li onclick="alert('Yapıştırmak için hücreye tıklayıp Ctrl+V tuşlarını kullanabilirsiniz.')">📥 Yapıştır (Ctrl+V)</li>
-        <div class="menu-divider"></div>
-        <li onclick="alert('Hücreye çift tıklayarak içeriği düzenleyebilir veya silebilirsiniz.')">🧹 İçeriği Temizle</li>
-        <li onclick="alert('Aşağıdaki tablodan en alt satıra geçerek yeni araç ekleyebilirsiniz.')">➕ Yeni Satır Ekle</li>
-        <div class="menu-divider"></div>
-        <li onclick="window.location.reload()">🔄 Tabloyu Yenile</li>
-    </ul>
-</div>
-
-<!-- TARAYICI SAĞ TIKINI ENGELLEYEN JAVASCRIPT -->
-<script>
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        const menu = document.getElementById('excel-context-menu');
-        if (menu) {
-            menu.style.display = 'block';
-            
-            // Ekran sınırlarına çarpmasını önle
-            let posX = e.clientX;
-            let posY = e.clientY;
-            if (posX + 200 > window.innerWidth) posX = window.innerWidth - 210;
-            if (posY + 220 > window.innerHeight) posY = window.innerHeight - 230;
-
-            menu.style.left = posX + 'px';
-            menu.style.top = posY + 'px';
-        }
-    });
-
-    document.addEventListener('click', function(e) {
-        const menu = document.getElementById('excel-context-menu');
-        if (menu && !menu.contains(e.target)) {
-            menu.style.display = 'none';
-        }
-    });
-</script>
 """, unsafe_allow_html=True)
 
-# 3. VERİTABANI BAĞLANTISI VE BAŞLANGIÇ VERİSİ
+# 3. VERİTABANI YÖNETİM FONKSİYONLARI (SQLite)
 DB_FILE = "saha_operasyon.db"
 
 def init_db():
@@ -153,7 +94,7 @@ def init_db():
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS matris (
-            sira INTEGER PRIMARY KEY,
+            sira INTEGER PRIMARY KEY AUTOINCREMENT,
             hat1_ozel TEXT,
             hat2_genel TEXT,
             eyap_silis TEXT,
@@ -162,27 +103,17 @@ def init_db():
             tosyali_cevher TEXT
         )
     ''')
-    
     c.execute("SELECT COUNT(*) FROM matris")
     if c.fetchone()[0] == 0:
         ornek_veri = [
-            (1, "31 ANM 573", "31 ANM 593", "31 ANK 374", "31 AAG 291", "31 ANM 598", "31 ANN 331"),
-            (2, "31 ANN 019", "31 ANN 168", "31 ANL 936", "31 AKL 553", "31 AIU 808", "31 AOK 866"),
-            (3, "31 ANM 150", "31 ANN 304", "31 ANM 576", "31 AKL 554", "31 AIU 869", "31 AKL 556"),
-            (4, "31 AOB 800", "31 ANN 312", "31 ANN 284", "31 AKL 852", "31 ANK 278", "31 ANM 210"),
-            (5, "31 AIU 820", "31 ANV 235", "31 ANR 925", "31 AKL 862", "31 ANM 584", "31 AIY 548"),
-            (6, "31 AKL 545", "31 ANV 253", "31 ANR 938", "31 ANJ 636", "31 ANN 358", "31 AOV 949"),
-            (7, "31 ANJ 479", "31 AOB 756", "31 ANR 943", "31 ANK 359", "31 ANR 916", "31 ANF 677"),
-            (8, "31 ANM 112", "31 AOK 710", "31 AOB 847", "31 ANM 091", "31 ANR 937", "31 AOK 698"),
-            (9, "31 ANM 157", "31 AOK 715", "31 AOK 711", "31 ANM 187", "31 AOV 941", "31 AIY 560"),
-            (10, "31 ANM 200", "31 AOV 747", "31 AOV 964", "31 ANM 201", "31 AOV 956", "31 AOC 430"),
-            (11, "31 ANM 219", "31 AOV 960", "31 ASZ 260", "31 ANM 244", "31 ANN 018", "31 ANM 211"),
-            (12, "31 ANM 243", "31 AOV 973", "31 AUR 259", "31 ANM 254", "31 ASZ 241", "31 ANM 337"),
-            (13, "31 ANM 265", "31 APP 839", "31 AUR 263", "31 ANM 260", "31 ANM 286", "31 ANM 264"),
-            (14, "31 ANM 295", "31 AUR 239", "31 AUR 289", "31 ANM 566", "31 AOV 943", "31 AIY 516"),
-            (15, "31 ANM 664", "31 AUR 243", "31 AUR 297", "31 ANR 914", "31 ABC 123", "31 ANM 285")
+            ("31 ANM 573", "31 ANM 593", "31 ANK 374", "31 AAG 291", "31 ANM 598", "31 ANN 331"),
+            ("31 ANN 019", "31 ANN 168", "31 ANL 936", "31 AKL 553", "31 AIU 808", "31 AOK 866"),
+            ("31 ANM 150", "31 ANN 304", "31 ANM 576", "31 AKL 554", "31 AIU 869", "31 AKL 556"),
+            ("31 AOB 800", "31 ANN 312", "31 ANN 284", "31 AKL 852", "31 ANK 278", "31 ANM 210"),
+            ("31 AIU 820", "31 ANV 235", "31 ANR 925", "31 AKL 862", "31 ANM 584", "31 AIY 548"),
+            ("31 AKL 545", "31 ANV 253", "31 ANR 938", "31 ANJ 636", "31 ANN 358", "31 AOV 949")
         ]
-        c.executemany("INSERT INTO matris VALUES (?,?,?,?,?,?,?)", ornek_veri)
+        c.executemany("INSERT INTO matris (hat1_ozel, hat2_genel, eyap_silis, guub_cimento, isken_komur, tosyali_cevher) VALUES (?,?,?,?,?,?)", ornek_veri)
         conn.commit()
     conn.close()
 
@@ -198,13 +129,21 @@ def save_data(df):
     conn.commit()
     conn.close()
 
+def insert_single_record(tesis_column, plaka_no):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    query = f"INSERT INTO matris ({tesis_column}) VALUES (?)"
+    c.execute(query, (plaka_no,))
+    conn.commit()
+    conn.close()
+
 init_db()
 if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
-# 4. ÜST PANEL & İSTATİSTİKLER (DİNAMİK CANLI TARİH)
-df_current = st.session_state.df_matris
+# 4. ÜST HEADER VE CANLI TARİH
 bugun_tarih = datetime.now().strftime("%d.%m.%Y")
+df_current = st.session_state.df_matris
 
 count_mmk = df_current['hat1_ozel'].replace('', None).count() + df_current['hat2_genel'].replace('', None).count()
 count_eyap = df_current['eyap_silis'].replace('', None).count()
@@ -216,20 +155,20 @@ st.markdown(f"""
 <div class="excel-header">
     <div>
         <h3 style="margin:0; color:#38bdf8;">⚡ ŞİMŞEK LOJİSTİK — OTOMASYONLU SEVKİYAT MATRİSİ</h3>
-        <span style="color:#94a3b8; font-size:0.85rem;">Veritabanı Entegreli Canlı Hücre Editörü</span>
+        <span style="color:#94a3b8; font-size:0.85rem;">Veritabanı Destekli Saha & Fleet Yönetim Paneli</span>
     </div>
     <div style="text-align:right; color:#34d399; font-weight:600;">
-        ● CANLI SİSTEM ({bugun_tarih})
+        ● SİSTEM CANLI ({bugun_tarih})
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Canlı Sayaç Kartları
+# İstatistik Sayaçları
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT (HURDA)</span><br><b style="color:#38bdf8; font-size:1.1rem;">{count_mmk} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT</span><br><b style="color:#38bdf8; font-size:1.1rem;">{count_mmk} Araç</b></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS KUMU)</span><br><b style="color:#34d399; font-size:1.1rem;">{count_eyap} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS)</span><br><b style="color:#34d399; font-size:1.1rem;">{count_eyap} Araç</b></div>', unsafe_allow_html=True)
 with c3:
     st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.1rem;">{count_guub} Araç</b></div>', unsafe_allow_html=True)
 with c4:
@@ -239,38 +178,87 @@ with c5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 5. İNTERAKTİF EXCEL MATRİSİ
-st.subheader("📋 Canlı Sevkiyat Planlama Tablosu (Düzenlenebilir)")
-st.caption("💡 İpucu: Hücreye tıklayıp verinizi değiştirebilir veya sağ tıklayarak özel Excel menüsünü kullanabilirsiniz.")
+# 5. MODÜLER SEKMELER
+tab_matris, tab_db, tab_ekle = st.tabs([
+    "📊 CANLI SEVKİYAT MATRİSİ (E-Tablo)",
+    "🗄️ VERİTABANI YÖNETİMİ",
+    "➕ YENİ ARAÇ / KAYIT EKLE"
+])
 
-column_configuration = {
-    "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
-    "hat1_ozel": st.column_config.TextColumn("MMK - HAT 1 (ÖZEL)", width="medium"),
-    "hat2_genel": st.column_config.TextColumn("MMK - HAT 2 (GENEL)", width="medium"),
-    "eyap_silis": st.column_config.TextColumn("EYAP (SİLİS KUMU)", width="medium"),
-    "guub_cimento": st.column_config.TextColumn("GÜUB (ÇİMENTO)", width="medium"),
-    "isken_komur": st.column_config.TextColumn("ISKEN (KÖMÜR)", width="medium"),
-    "tosyali_cevher": st.column_config.TextColumn("TOSYALI (CEVHER)", width="medium"),
-}
+# --- SEKME 1: CANLI MATRİS (E-TABLO) ---
+with tab_matris:
+    st.caption("💡 Kısayol Bilgisi: Excel'den doğrudan hücre seçip `Ctrl+C` ve `Ctrl+V` ile veri kopyalayabilirsiniz.")
+    
+    column_configuration = {
+        "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
+        "hat1_ozel": st.column_config.TextColumn("MMK - HAT 1 (ÖZEL)", width="medium"),
+        "hat2_genel": st.column_config.TextColumn("MMK - HAT 2 (GENEL)", width="medium"),
+        "eyap_silis": st.column_config.TextColumn("EYAP (SİLİS KUMU)", width="medium"),
+        "guub_cimento": st.column_config.TextColumn("GÜUB (ÇİMENTO)", width="medium"),
+        "isken_komur": st.column_config.TextColumn("ISKEN (KÖMÜR)", width="medium"),
+        "tosyali_cevher": st.column_config.TextColumn("TOSYALI (CEVHER)", width="medium"),
+    }
 
-edited_df = st.data_editor(
-    st.session_state.df_matris,
-    column_config=column_configuration,
-    num_rows="dynamic",
-    use_container_width=True,
-    height=520,
-    hide_index=True
-)
+    edited_df = st.data_editor(
+        st.session_state.df_matris,
+        column_config=column_configuration,
+        num_rows="dynamic",
+        use_container_width=True,
+        height=480,
+        hide_index=True
+    )
 
-# 6. VERİTABANI KAYDETME & CANLI SENKRONİZASYON
-btn_col1, btn_col2 = st.columns([1, 4])
-
-with btn_col1:
-    if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
+    if st.button("💾 Matris Değişikliklerini Veritabanına Kaydet", type="primary"):
         st.session_state.df_matris = edited_df
         save_data(edited_df)
-        st.success("✅ Veritabanına başarıyla kaydedildi!")
+        st.success("✅ Veritabanı başarıyla güncellendi!")
         st.rerun()
 
-with btn_col2:
-    st.info("Değişiklik yaptıktan sonra 'Değişiklikleri Kaydet' butonuna basarak veritabanınızı güncelleyebilirsiniz.")
+# --- SEKME 2: VERİTABANI YÖNETİMİ ---
+with tab_db:
+    st.subheader("🗄️ SQLite Veritabanı Ham Kayıtları (`saha_operasyon.db`)")
+    st.dataframe(load_data(), use_container_width=True, height=400)
+    
+    st.divider()
+    if st.button("🚨 Veritabanını Sıfırla ve Örnek Verileri Yükle"):
+        if os.path.exists(DB_FILE):
+            os.remove(DB_FILE)
+        init_db()
+        st.session_state.df_matris = load_data()
+        st.success("Veritabanı sıfırlandı ve varsayılan veri yüklendi.")
+        st.rerun()
+
+# --- SEKME 3: YENİ ARAÇ / SEVKİYAT EKLE ---
+with tab_ekle:
+    st.subheader("➕ Veritabanına Yeni Sevkiyat Kaydı Ekle")
+    
+    with st.form("yeni_kayit_formu"):
+        col_f1, col_f2 = st.columns(2)
+        
+        with col_f1:
+            yeni_plaka = st.text_input("Plaka Giriniz:", placeholder="Örn: 31 ANM 999").upper()
+        
+        with col_f2:
+            hedef_tesis = st.selectbox(
+                "Atanacak Tesis / Hat Seçiniz:",
+                [
+                    ("hat1_ozel", "MMK - HAT 1 (ÖZEL)"),
+                    ("hat2_genel", "MMK - HAT 2 (GENEL)"),
+                    ("eyap_silis", "EYAP (SİLİS KUMU)"),
+                    ("guub_cimento", "GÜUB (ÇİMENTO)"),
+                    ("isken_komur", "ISKEN (KÖMÜR)"),
+                    ("tosyali_cevher", "TOSYALI (CEVHER)")
+                ],
+                format_func=lambda x: x[1]
+            )
+        
+        btn_kaydet = st.form_submit_button("➕ Veritabanına Ekle", type="primary")
+        
+        if btn_kaydet:
+            if yeni_plaka.strip():
+                insert_single_record(hedef_tesis[0], yeni_plaka.strip())
+                st.session_state.df_matris = load_data()
+                st.success(f"✅ **{yeni_plaka}** plakası **{hedef_tesis[1]}** alanına veritabanına eklendi!")
+                st.rerun()
+            else:
+                st.warning("Lütfen geçerli bir plaka giriniz.")
