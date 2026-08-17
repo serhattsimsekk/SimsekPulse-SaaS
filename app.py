@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 # =========================================================
-# 1. SAYFA YAPILANDIRMASI VE GÜVENLİK
+# 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
     page_title="ŞimşekLog | Multi-Tenant Enterprise OS",
@@ -41,22 +41,14 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (SABİT SOL MENÜ VE TEMİZLİK)
+# 2. GLOBAL CSS (AÇILIP KAPANABİLİR SOL MENÜ & MODERN TEMA)
 # =========================================================
 st.markdown("""
 <style>
     .stAppHeader, #MainMenu, footer, header { display: none !important; }
     
-    /* SOL MENÜYÜ SABİTLE VE DARALTMAYI ENGELLE */
-    [data-testid="stSidebarCollapseButton"],
-    [data-testid="collapsedControl"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
+    /* AÇILIR-KAPANIR SOL MENÜ AYARLARI */
     [data-testid="stSidebar"] {
-        min-width: 280px !important;
-        max-width: 280px !important;
         background-color: #0a1120 !important;
         border-right: 1px solid #1e293b !important;
     }
@@ -93,14 +85,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. SIFIR TABANLI MÜŞTERİ VERİTABANI MİMARİSİ (SQLite)
+# 3. SIFIR TABANLI VERİTABANI MİMARİSİ (SQLite)
 # =========================================================
 DB_FILE = "simsek_os.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # Sevkiyat Matrisi (Sıfır Tablo)
     c.execute('''
         CREATE TABLE IF NOT EXISTS sevkiyat (
             sira INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,18 +99,22 @@ def init_db():
             hat_4 TEXT, kademe_soforsuz TEXT
         )
     ''')
-    # Filo Envanteri (Sıfır Tablo)
     c.execute('''
         CREATE TABLE IF NOT EXISTS filo (
             plaka TEXT PRIMARY KEY, dorse TEXT, tip TEXT,
             sofor_1 TEXT, sofor_2 TEXT, grup TEXT, durum TEXT
         )
     ''')
-    # Finans & Tarife (Sıfır Tablo)
     c.execute('''
         CREATE TABLE IF NOT EXISTS finans_tarife (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tesis_adi TEXT, birim_fiyat REAL, toplam_tonaj REAL
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS whatsapp_gruplar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            grup_adi TEXT, grup_id TEXT, bildirim_tipi TEXT, aktif INTEGER
         )
     ''')
     conn.commit()
@@ -142,9 +137,10 @@ def save_data(df, table):
 if "df_sevkiyat" not in st.session_state: st.session_state.df_sevkiyat = load_data("sevkiyat")
 if "df_filo" not in st.session_state: st.session_state.df_filo = load_data("filo")
 if "df_finans" not in st.session_state: st.session_state.df_finans = load_data("finans_tarife")
+if "df_wa" not in st.session_state: st.session_state.df_wa = load_data("whatsapp_gruplar")
 
 # =========================================================
-# 4. YETKİLENDİRME & SOL NAVİGASYON (RBAC)
+# 4. YETKİLENDİRME & AÇILIR-KAPANIR SOL NAVİGASYON (RBAC)
 # =========================================================
 with st.sidebar:
     st.markdown("""
@@ -156,7 +152,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ROL SEÇİMİ (MÜŞTERİ YETKİ KONTROLÜ)
     kullanici_rolu = st.selectbox(
         "👤 AKTİF KULLANICI ROLÜ:",
         ["👑 Patron (Yönetici)", "💼 Muhasebe Departmanı", "🚚 Sevkiyatçı / Vardiya Amiri", "👮‍♂️ Baş Şoför"],
@@ -165,7 +160,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ROL BAZLI MENÜ OLUŞTURMA
     menuler = [
         "📊 Dashboard & Yönetici Özeti",
         "🟢 Canlı Sevkiyat Matrisi (Grid)",
@@ -174,10 +168,13 @@ with st.sidebar:
         "🚨 Kademe, Muayene & Lastik"
     ]
     
-    # FİNANS EKRANI SADECE PATRON VE MUHASEBEYE AÇILIR
     finans_yetkisi = kullanici_rolu in ["👑 Patron (Yönetici)", "💼 Muhasebe Departmanı"]
+    patron_yetkisi = kullanici_rolu == "👑 Patron (Yönetici)"
+    
     if finans_yetkisi:
         menuler.append("💼 Finans, Faturalama & Ciro")
+    if patron_yetkisi:
+        menuler.append("📱 WhatsApp Grup Entegrasyonu")
         
     menuler.append("🌐 B2B E-Ticaret & Kurye Ağı")
     
@@ -212,7 +209,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. DİNAMİK MÜŞTERİ MODÜLLERİ
+# 5. DİNAMİK MODÜLLER
 # =========================================================
 
 # --- MODÜL 1: DASHBOARD ---
@@ -273,10 +270,10 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
 
     config = {
         "sira": st.column_config.NumberColumn("SIRA", disabled=True),
-        "hat_1": st.column_config.TextColumn("TESİS / LIMAN HATTI 1", width="medium"),
-        "hat_2": st.column_config.TextColumn("TESİS / LIMAN HATTI 2", width="medium"),
-        "hat_3": st.column_config.TextColumn("TESİS / LIMAN HATTI 3", width="medium"),
-        "hat_4": st.column_config.TextColumn("TESİS / LIMAN HATTI 4", width="medium"),
+        "hat_1": st.column_config.TextColumn("TESİS / LİMAN HATTI 1", width="medium"),
+        "hat_2": st.column_config.TextColumn("TESİS / LİMAN HATTI 2", width="medium"),
+        "hat_3": st.column_config.TextColumn("TESİS / LİMAN HATTI 3", width="medium"),
+        "hat_4": st.column_config.TextColumn("TESİS / LİMAN HATTI 4", width="medium"),
         "kademe_soforsuz": st.column_config.TextColumn("🚨 KADEME / ŞOFÖRSÜZ", width="medium"),
     }
     
@@ -358,7 +355,7 @@ elif menu == "🚨 Kademe, Muayene & Lastik":
     else:
         st.info("ℹ️ Kayıtlı araç bulunamadı.")
 
-# --- MODÜL 6: FİNANS & FATURALAMA (GÜVENLİ & DİNAMİK) ---
+# --- MODÜL 6: FİNANS & FATURALAMA ---
 elif menu == "💼 Finans, Faturalama & Ciro":
     if not finans_yetkisi:
         st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron** veya **Muhasebe** yetkisi olan kullanıcılar erişebilir.")
@@ -391,20 +388,49 @@ elif menu == "💼 Finans, Faturalama & Ciro":
             
             toplam_ciro = df_fin['Tahmini_Ciro_TL'].sum()
             st.success(f"💰 **Toplam Tahmini Kesilecek Fatura Tutarı: ₺ {toplam_ciro:,.2f}**")
-            
-            st.divider()
-            st.markdown("📲 **Patron WhatsApp Vardiya Sonu Özeti (Canlı Üretilen Format):**")
-            
-            ozet_metni = f"""[ŞimşekLog Otomatik Özet - {datetime.now().strftime('%d.%m.%Y %H:%M')}]\nSayın Yönetici, vardiya hakediş özeti aşağıdadır:\n"""
-            for _, r in df_fin.iterrows():
-                ozet_metni += f"• {r['tesis_adi']}: {r['toplam_tonaj']} Ton (Tutar: ₺{r['Tahmini_Ciro_TL']:,.2f})\n"
-            ozet_metni += f"\nTOPLAM HAKEDİŞ: ₺{toplam_ciro:,.2f}\nSistem: app.simseklog.com"
-            
-            st.code(ozet_metni, language="text")
         else:
             st.info("ℹ️ Henüz finansal hakediş kaydı bulunmamaktadır. Yukarıdaki formdan şirketinizin hakediş verilerini girebilirsiniz.")
 
-# --- MODÜL 7: B2B E-TİCARET ---
+# --- MODÜL 7: WHATSAPP GRUP ENTEGRASYONU ---
+elif menu == "📱 WhatsApp Grup Entegrasyonu":
+    if not patron_yetkisi:
+        st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron (Yönetici)** erişebilir.")
+    else:
+        st.subheader("📱 İsteğe Bağlı WhatsApp Grup Entegrasyon Paneli")
+        st.caption("Sistemdeki vardiya sonu raporlarının, kantar bildirimlerinin ve kademe alarmlarının hangi WhatsApp gruplarına otomatik atılacağını buradan yönetebilirsiniz.")
+        
+        with st.form("wa_grup_formu"):
+            w1, w2, w3 = st.columns(3)
+            g_ad = w1.text_input("Grup / Kanal Adı:", placeholder="Örn: Vardiya & Operasyon Grubu")
+            g_id = w2.text_input("WhatsApp Group ID / Tel No:", placeholder="Örn: 90532XXXXXXX veya 120363@g.us")
+            g_tip = w3.selectbox("Otomatik Gönderilecek Bildirim Tipi:", [
+                "📊 Vardiya Sonu Raporu (08:00)",
+                "🚨 Kademe & Arıza Alarmları",
+                "⚖️ Anlık Kantar Fişi Geçişleri",
+                "📢 Tüm Bildirimler (Full Paket)"
+            ])
+            
+            if st.form_submit_button("➕ WhatsApp Grubu Ekle & Entegre Et", type="primary", use_container_width=True):
+                if g_ad.strip() and g_id.strip():
+                    conn = sqlite3.connect(DB_FILE)
+                    conn.execute("INSERT INTO whatsapp_gruplar (grup_adi, grup_id, bildirim_tipi, aktif) VALUES (?,?,?,?)",
+                                 (g_ad.strip(), g_id.strip(), g_tip, 1))
+                    conn.commit(); conn.close()
+                    st.session_state.df_wa = load_data("whatsapp_gruplar")
+                    st.success(f"✅ **{g_ad}** grubu sisteme başarıyla entegre edildi!")
+                    st.rerun()
+                else:
+                    st.warning("Lütfen Grup Adı ve Group ID alanlarını doldurun.")
+
+        df_w = st.session_state.df_wa
+        if len(df_w) > 0:
+            st.divider()
+            st.markdown("#### 🟢 Aktif Entegre WhatsApp Grupları")
+            st.dataframe(df_w[['id', 'grup_adi', 'grup_id', 'bildirim_tipi', 'aktif']], use_container_width=True, hide_index=True)
+        else:
+            st.info("ℹ️ Henüz tanımlanmış bir WhatsApp grubu yok. İsteğe bağlı olarak yukarıdan gruplarınızı bağlayabilirsiniz.")
+
+# --- MODÜL 8: B2B E-TİCARET ---
 elif menu == "🌐 B2B E-Ticaret & Kurye Ağı":
     st.subheader("🌐 Son Kilometre (Last-Mile) E-Ticaret Kurye Yönetimi")
     st.info("ℹ️ E-ticaret ve kargo dağıtımı yapan hafif ticari araç yönetimi alanı. Şirketinize ait dağıtım rotalarını buradan yönetebilirsiniz.")
