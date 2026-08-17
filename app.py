@@ -1,366 +1,217 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
 
-# 1. EN ÜSTTE PAGE CONFIG
+# 1. SAYFA YAPILANDIRMASI (Excel Modu)
 st.set_page_config(
-    page_title="Şimşek Lojistik | SimsekPulse Enterprise",
-    page_icon="⚡",
+    page_title="Şimşek Lojistik | Excel Sevkiyat Matrisi",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# 2. GLOBAL ENTERPRISE SAAS STİL ENJEKSİYONU (CSS)
+# 2. EXCEL BİREBİR ARAYÜZ VE HÜCRE STİLLERİ (CSS)
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-    /* Global Streamlit Elemanlarını & Rozetlerini Sıfırla */
+    /* Streamlit Menü ve Başlıkları Gizle */
     .stAppHeader, #MainMenu, footer, header,
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
-    [data-testid="stToolbar"],
-    .viewerBadge_container__1vB22,
-    .viewerBadge_link__1S137 {
+    [data-testid="stToolbar"] {
         display: none !important;
         visibility: hidden !important;
     }
 
-    /* Sayfa Yerleşimi ve Tipografi */
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
     .stApp {
-        background-color: #080C14;
-        color: #F1F5F9;
+        background-color: #0b1329 !important;
+        color: #000000;
     }
+
     .block-container {
-        padding-top: 1rem !important;
-        padding-bottom: 2rem !important;
-        max-width: 98% !important;
+        padding: 0.5rem 1rem !important;
+        max-width: 100% !important;
     }
 
-    /* Sol Menü (Sidebar) Kurumsal Tasarım */
-    [data-testid="stSidebar"] {
-        background-color: #0F172A !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-    }
-
-    /* Top Brand Hero Banner */
-    .hero-banner {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 1.25rem 1.75rem;
-        margin-bottom: 1.25rem;
+    /* Excel Üst Bilgi Çubuğu */
+    .excel-top-bar {
+        background-color: #0d2137;
+        color: #ffffff;
+        padding: 8px 15px;
+        font-family: 'Calibri', 'Segoe UI', sans-serif;
+        font-weight: bold;
+        font-size: 14px;
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-    }
-    .brand-title {
-        color: #FFFFFF;
-        font-size: 1.5rem;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        margin: 0;
-        display: flex;
         align-items: center;
-        gap: 10px;
-    }
-    .brand-subtitle {
-        color: #94A3B8;
-        font-size: 0.875rem;
-        margin-top: 4px;
-        font-weight: 400;
+        border-bottom: 2px solid #1a365d;
     }
 
-    /* Enterprise KPI Kartları */
-    .kpi-card {
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 1rem 1.25rem;
-        transition: all 0.2s ease;
-    }
-    .kpi-card:hover {
-        border-color: rgba(56, 189, 248, 0.4);
-        transform: translateY(-2px);
-    }
-    .kpi-label {
-        color: #64748B;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .kpi-value {
-        color: #F8FAFC;
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin-top: 4px;
-    }
-    .kpi-trend {
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-top: 4px;
-    }
-
-    /* Tab / Navigasyon Barı */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #0F172A;
-        padding: 6px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        border-radius: 8px;
-        color: #94A3B8;
-        font-weight: 600;
-        font-size: 0.875rem;
-        padding: 0 16px;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #0284C7 !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
-    }
-
-    /* HTML Özel Matris Tablosu (Pills & Status) */
-    .custom-table {
+    /* BİREBİR EXCEL TABLO MATRİSİ STİLİ */
+    .excel-container {
         width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        background: #0F172A;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        margin-top: 10px;
-    }
-    .custom-table th {
-        background: #1E293B;
-        color: #94A3B8;
-        font-weight: 600;
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        padding: 14px 18px;
-        text-align: left;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-    .custom-table td {
-        padding: 14px 18px;
-        color: #E2E8F0;
-        font-size: 0.9rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    .custom-table tr:last-child td {
-        border-bottom: none;
-    }
-    .custom-table tr:hover td {
-        background-color: rgba(255, 255, 255, 0.02);
+        overflow-x: auto;
+        background-color: #ffffff;
+        border: 2px solid #2b4c7e;
+        margin-top: 5px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
 
-    /* Status Pills */
-    .badge {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
+    .excel-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Calibri', 'Arial', sans-serif;
+        font-size: 12px;
+        color: #000000;
     }
-    .badge-transit { background: rgba(14, 165, 233, 0.15); color: #38BDF8; border: 1px solid rgba(14, 165, 233, 0.3); }
-    .badge-loading { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
-    .badge-done { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-waiting { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-    .badge-ozmal { background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); }
-    .badge-destek { background: rgba(148, 163, 184, 0.15); color: #CBD5E1; border: 1px solid rgba(148, 163, 184, 0.3); }
+
+    .excel-table th, .excel-table td {
+        border: 1px solid #a6b9ca;
+        padding: 4px 6px;
+        text-align: center;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+
+    /* Excel Başlık Hücreleri */
+    .th-header { background-color: #d9e1f2; color: #000; font-weight: bold; }
+    .th-cinsi { background-color: #2f5597; color: #ffffff; font-weight: bold; font-size: 13px; }
+    .row-ozmal { background-color: #e2efda; color: #375623; font-weight: bold; }
+    .row-destek { background-color: #fce4d6; color: #c65911; font-weight: bold; }
+
+    /* Görseldeki Renkli Sütun Hücreleri */
+    .col-green { background-color: #00c853 !important; color: #000000 !important; font-weight: bold; }
+    .col-cyan { background-color: #00e5ff !important; color: #000000 !important; font-weight: bold; }
+    .col-purple { background-color: #b388ff !important; color: #000000 !important; font-weight: bold; }
+    .col-blue { background-color: #80d8ff !important; color: #000000 !important; font-weight: bold; }
+    .col-orange { background-color: #ff9100 !important; color: #000000 !important; font-weight: bold; }
+    .col-white { background-color: #ffffff !important; color: #000000 !important; }
+
+    /* Alt Excel Sayfa Sekmeleri (Sheet Tabs) */
+    .excel-sheets-bar {
+        background-color: #e6e6e6;
+        padding: 4px 10px;
+        display: flex;
+        gap: 2px;
+        border-top: 1px solid #b0b0b0;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 11px;
+    }
+
+    .sheet-tab {
+        padding: 5px 15px;
+        background-color: #d9d9d9;
+        border: 1px solid #b0b0b0;
+        border-bottom: none;
+        border-radius: 3px 3px 0 0;
+        color: #333333;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .sheet-tab.active {
+        background-color: #ffffff;
+        color: #008000;
+        border-top: 3px solid #008000;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. SOL YAN MENÜ (ENTERPRISE SIDEBAR)
-with st.sidebar:
-    st.markdown("""
-        <div style="padding: 10px 0;">
-            <h3 style="color:#FFF; margin:0; font-size:1.2rem; font-weight:800;">⚡ ŞİMŞEK LOGISTICS</h3>
-            <p style="color:#64748B; margin:2px 0 0 0; font-size:0.75rem; font-weight:600;">ENTERPRISE DISPATCH PLATFORM</p>
-        </div>
-    """, unsafe_allow_html=True)
-    st.divider()
-    
-    calisma_gunu = st.date_input("📅 Operasyon Tarihi:", date(2026, 8, 17))
-    vardiya = st.selectbox("🕒 Aktif Vardiya:", ["08:00 - 16:00 (Gündüz)", "16:00 - 24:00 (Akşam)", "00:00 - 08:00 (Gece)"])
-    bolge = st.multiselect("📍 Bölge Filtresi:", ["Marmara", "Ege", "İç Anadolu", "Liman Operasyon"], default=["Marmara", "Ege"])
-    
-    st.divider()
-    st.markdown("""
-        <div style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.2); border-radius:8px; padding:10px; text-align:center;">
-            <span style="color:#34D399; font-size:0.8rem; font-weight:600;">● Live Cloud Data Sync</span><br>
-            <span style="color:#64748B; font-size:0.7rem;">SimsekPulse Core v3.0</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-# 4. ÜST HERO BANNER
+# 3. EXCEL ÜST BANT (Vardiya & Tarih)
 st.markdown("""
-<div class="hero-banner">
-    <div>
-        <div class="brand-title">
-            <span>⚡ ŞİMŞEK LOJİSTİK</span>
-            <span style="background: #0284C7; color: #FFF; font-size: 0.65rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">PRO ENTERPRISE</span>
-        </div>
-        <div class="brand-subtitle">
-            Canlı Fleet Matrisi, Dökme Hammadde & Saha Operasyon Yönetim Merkezi
-        </div>
-    </div>
-    <div style="display:flex; align-items:center; gap:12px;">
-        <div style="text-align:right;">
-            <div style="color:#34D399; font-size:0.85rem; font-weight:700;">● SYSTEM ONLINE</div>
-            <div style="color:#64748B; font-size:0.75rem;">Latency: 14ms</div>
-        </div>
-    </div>
+<div class="excel-excel-top-bar excel-top-bar">
+    <div>⚡ ŞİMŞEK LOJİSTİK - İSKENDERUN / DİLOVASI SAHA MATRİSİ</div>
+    <div>📅 12.08.2026 VARDİYA AMİRLERİ: SİNAN GÜL // MUSTAFA ÇETİN</div>
 </div>
 """, unsafe_allow_html=True)
 
-# 5. METRİK VE KPI KARTLARI
-c1, c2, c3, c4, c5 = st.columns(5)
-
-with c1:
-    st.markdown("""
-    <div class="kpi-card">
-        <div class="kpi-label">Vardiya Amiri</div>
-        <div style="color:#F1F5F9; font-size:0.95rem; font-weight:700; margin-top:6px;">Sinan Gül</div>
-        <div class="kpi-trend" style="color:#64748B;">Yrd: M. Çetin</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c2:
-    st.markdown("""
-    <div class="kpi-card">
-        <div class="kpi-label">Saha Durumu</div>
-        <div class="kpi-value" style="color:#34D399;">AKTİF</div>
-        <div class="kpi-trend" style="color:#34D399;">↑ %100 Kapasite</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    st.markdown("""
-    <div class="kpi-card">
-        <div class="kpi-label">Öz Mal (Filo)</div>
-        <div class="kpi-value">18 Araç</div>
-        <div class="kpi-trend" style="color:#38BDF8;">16 Seferde</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    st.markdown("""
-    <div class="kpi-card">
-        <div class="kpi-label">Destek (Dış)</div>
-        <div class="kpi-value">7 Araç</div>
-        <div class="kpi-trend" style="color:#FBBF24;">5 Yüklemede</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c5:
-    st.markdown("""
-    <div class="kpi-card">
-        <div class="kpi-label">Günlük Tonaj</div>
-        <div class="kpi-value">1,420 Ton</div>
-        <div class="kpi-trend" style="color:#34D399;">↑ %12 Hedef Üstü</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# 6. OPERASYONEL TABS (SEKMELER)
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 CANLI SEVKİYAT MATRİSİ",
-    "🚚 FİLO & SÜRÜCÜ KARNESİ",
-    "🎨 DORSE & RENK MATRİSİ",
-    "🏛️ GARAJ & BAKIM KONTROL",
-    "📈 FİNANS & OPERASYON RAPORU"
-])
-
-with tab1:
-    st.markdown("""
-    <table class="custom-table">
+# 4. CANLI EXCEL MATRİS TABLOSU (HTML/CSS REPLİKA)
+st.markdown("""
+<div class="excel-container">
+    <table class="excel-table">
         <thead>
-            <tr>
-                <th>PLAKA</th>
-                <th>SÜRÜCÜ</th>
-                <th>ARAÇ TİPİ</th>
-                <th>YÜK / HAMMADDE</th>
-                <th>ÇIKIŞ - VARDIŞ</th>
-                <th>GİRİŞ SAATİ</th>
-                <th>OPERASYON DURUMU</th>
+            <tr class="th-header">
+                <th style="width: 40px;">LİMAN GEMİ ADI TESİS YERLERİ</th>
+                <th colspan="2">MMK PORT / SAHA 1</th>
+                <th>EYAP LİMANI</th>
+                <th>GÜUB LİMANI</th>
+                <th>ISKEN SANTRAL</th>
+                <th>TOSYALI LİMANI</th>
+            </tr>
+            <tr class="th-cinsi">
+                <td>CİNSİ</td>
+                <td colspan="2">HURDA / DÖKME YÜK</td>
+                <td>SİLİS KUMU</td>
+                <td>ÇİMENTO</td>
+                <td>KÖMÜR</td>
+                <td>CEVHER</td>
+            </tr>
+            <tr class="row-ozmal">
+                <td>ÖZ MAL (FİLO)</td>
+                <td colspan="2">79 Araç</td>
+                <td>14 Araç</td>
+                <td>7 Araç</td>
+                <td>21 Araç</td>
+                <td>12 Araç</td>
+            </tr>
+            <tr class="row-destek">
+                <td>DESTEK (DİŞ)</td>
+                <td colspan="2">0 Araç</td>
+                <td>0 Araç</td>
+                <td>0 Araç</td>
+                <td>0 Araç</td>
+                <td>2 Araç</td>
+            </tr>
+            <tr class="th-header" style="background-color: #b4c6e7;">
+                <th>SIRA</th>
+                <th>HAT 1 (ÖZEL)</th>
+                <th>HAT 2 (GENEL)</th>
+                <th>SAHA A</th>
+                <th>SAHA B</th>
+                <th>SAHA C</th>
+                <th>SAHA D</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td><b>31ANC225</b></td>
-                <td>Ahmet Yılmaz</td>
-                <td><span class="badge badge-ozmal">Öz Mal</span></td>
-                <td>Silis Kumu (Dökme)</td>
-                <td>Dilovası ➔ Gebze</td>
-                <td>08:30</td>
-                <td><span class="badge badge-transit">● Yolda</span></td>
-            </tr>
-            <tr>
-                <td><b>34ABC123</b></td>
-                <td>Mehmet Kaya</td>
-                <td><span class="badge badge-destek">Destek</span></td>
-                <td>Endüstriyel Hammadde</td>
-                <td>Liman Kuyu ➔ Aliağa</td>
-                <td>09:15</td>
-                <td><span class="badge badge-loading">● Yüklemede</span></td>
-            </tr>
-            <tr>
-                <td><b>35XYZ987</b></td>
-                <td>Ali Demir</td>
-                <td><span class="badge badge-ozmal">Öz Mal</span></td>
-                <td>Çimento / Bigbag</td>
-                <td>Konya ➔ Afyon</td>
-                <td>10:00</td>
-                <td><span class="badge badge-done">✓ Tamamlandı</span></td>
-            </tr>
-            <tr>
-                <td><b>06DEF456</b></td>
-                <td>Hasan Şahin</td>
-                <td><span class="badge badge-destek">Destek</span></td>
-                <td>Buğday / Arpa Sevkiyatı</td>
-                <td>Bandırma ➔ Bursa</td>
-                <td>10:45</td>
-                <td><span class="badge badge-waiting">⏳ Kantarda Bekliyor</span></td>
-            </tr>
-            <tr>
-                <td><b>41LGT889</b></td>
-                <td>Mustafa Çelik</td>
-                <td><span class="badge badge-ozmal">Öz Mal</span></td>
-                <td>Dökme Kuru Yük</td>
-                <td>Gemlik ➔ İnegöl</td>
-                <td>11:20</td>
-                <td><span class="badge badge-transit">● Yolda</span></td>
-            </tr>
+            <tr><td><b>1</b></td><td class="col-green">31 ANM 573</td><td>31 ANM 593</td><td class="col-cyan">31 ANK 374</td><td class="col-cyan">31 AAG 291</td><td class="col-purple">31 ANM 598</td><td class="col-purple">31 ANN 331</td></tr>
+            <tr><td><b>2</b></td><td class="col-green">31 ANN 019</td><td>31 ANN 168</td><td class="col-cyan">31 ANL 936</td><td class="col-cyan">31 AKL 553</td><td class="col-purple">31 AIU 808</td><td class="col-purple">31 AOK 866</td></tr>
+            <tr><td><b>3</b></td><td class="col-green">31 ANM 150</td><td>31 ANN 304</td><td class="col-cyan">31 ANM 576</td><td class="col-cyan">31 AKL 554</td><td class="col-purple">31 AIU 869</td><td class="col-purple">31 AKL 556</td></tr>
+            <tr><td><b>4</b></td><td class="col-white">31 AOB 800</td><td>31 ANN 312</td><td class="col-cyan">31 ANN 284</td><td class="col-cyan">31 AKL 852</td><td class="col-purple">31 ANK 278</td><td class="col-purple">31 ANM 210</td></tr>
+            <tr><td><b>5</b></td><td class="col-white">31 AIU 820</td><td>31 ANV 235</td><td class="col-cyan">31 ANR 925</td><td class="col-cyan">31 AKL 862</td><td class="col-purple">31 ANM 584</td><td class="col-purple">31 AIY 548</td></tr>
+            <tr><td><b>6</b></td><td class="col-white">31 AKL 545</td><td>31 ANV 253</td><td class="col-cyan">31 ANR 938</td><td class="col-cyan">31 ANJ 636</td><td class="col-purple">31 ANN 358</td><td class="col-purple">31 AOV 949</td></tr>
+            <tr><td><b>7</b></td><td class="col-white">31 ANJ 479</td><td>31 AOB 756</td><td class="col-cyan">31 ANR 943</td><td class="col-cyan">31 ANK 359</td><td class="col-purple">31 ANR 916</td><td class="col-purple">31 ANF 677</td></tr>
+            <tr><td><b>8</b></td><td class="col-white">31 ANM 112</td><td>31 AOK 710</td><td class="col-white">31 AOB 847</td><td class="col-cyan">31 ANM 091</td><td class="col-purple">31 ANR 937</td><td class="col-orange">31 AOK 698</td></tr>
+            <tr><td><b>9</b></td><td class="col-white">31 ANM 157</td><td>31 AOK 715</td><td class="col-white">31 AOK 711</td><td class="col-cyan">31 ANM 187</td><td class="col-purple">31 AOV 941</td><td class="col-orange">31 AIY 560</td></tr>
+            <tr><td><b>10</b></td><td class="col-white">31 ANM 200</td><td>31 AOV 747</td><td class="col-white">31 AOV 964</td><td class="col-cyan">31 ANM 201</td><td class="col-purple">31 AOV 956</td><td class="col-orange">31 AOC 430</td></tr>
+            <tr><td><b>11</b></td><td class="col-white">31 ANM 219</td><td>31 AOV 960</td><td class="col-white">31 ASZ 260</td><td class="col-cyan">31 ANM 244</td><td class="col-purple">31 ANN 018</td><td class="col-orange">31 ANM 211</td></tr>
+            <tr><td><b>12</b></td><td class="col-white">31 ANM 243</td><td>31 AOV 973</td><td class="col-white">31 AUR 259</td><td class="col-cyan">31 ANM 254</td><td class="col-purple">31 ASZ 241</td><td class="col-orange">31 ANM 337</td></tr>
+            <tr><td><b>13</b></td><td class="col-white">31 ANM 265</td><td>31 APP 839</td><td class="col-white">31 AUR 263</td><td class="col-cyan">31 ANM 260</td><td class="col-purple">31 ANM 286</td><td class="col-orange">31 ANM 264</td></tr>
+            <tr><td><b>14</b></td><td class="col-white">31 ANM 295</td><td>31 AUR 239</td><td class="col-white">31 AUR 289</td><td class="col-cyan">31 ANM 566</td><td class="col-purple">31 AOV 943</td><td class="col-orange">31 AIY 516</td></tr>
+            <tr><td><b>15</b></td><td class="col-white">31 ANM 664</td><td>31 AUR 243</td><td class="col-white">31 AUR 297</td><td class="col-cyan">31 ANR 914</td><td class="col-white">31 ABC 123</td><td class="col-orange">31 ANM 285</td></tr>
         </tbody>
     </table>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-with tab2:
-    st.subheader("🚚 Sürücü Performans & Vardiya Analizi")
-    st.info("Canlı GPS ve dijital takoğraf verileri ile sürücü sürüş/mola zamanı takibi.")
+# 5. ALT EXCEL SAYFA SEKMELERİ (Sheet Tabs)
+st.markdown("""
+<div class="excel-sheets-bar">
+    <div class="sheet-tab">AYLIK ÖZET</div>
+    <div class="sheet-tab">ARAÇ GRUP DÜZENİ</div>
+    <div class="sheet-tab">ARAÇ VERİTABANI</div>
+    <div class="sheet-tab">11.08.2026</div>
+    <div class="sheet-tab active">GÜNCEL SEVKİYAT</div>
+</div>
+""", unsafe_allow_html=True)
 
-with tab3:
-    st.subheader("🎨 Dış Tedarikçi & Dorse Renk Haritası")
-    st.write("Dorse türlerine göre dinamik renk kategorizasyonu.")
-
-with tab4:
-    st.subheader("🏛️ Öz Mal Garaj & Teknik Servis Durumu")
-    st.write("Periyodik bakım zamanı gelen çekici ve dorse takip listesi.")
-
-with tab5:
-    st.subheader("📈 Operasyonel Finans ve Hakediş Raporları")
-    st.write("Sefer başı maliyet, yakıt tüketim oranları ve müşteri hakediş matrisi.")
+# 6. EXCEL DÜZENLEME & İŞLEVSALLİK PANELİ (Veri Girişi)
+st.markdown("<br>", unsafe_allow_html=True)
+with st.expander("📝 Excel Matrisine Araç / Plaka Ekle - Düzenle"):
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.text_input("Plaka No:", placeholder="Örn: 31 ANM 573")
+    with c2:
+        st.selectbox("Hedef Sütun / Tesis:", ["MMK PORT (Hurda)", "EYAP (Silis Kumu)", "GÜUB (Çimento)", "TOSYALI"])
+    with c3:
+        st.selectbox("Renk Kodlama:", ["Yeşil (Aktif)", "Turkuaz (Yolda)", "Mor (Kantar)", "Turuncu (Destek)"])
+    with c4:
+        st.button("➕ Matrise Kaydet", use_container_width=True)
