@@ -2,315 +2,387 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+import streamlit.components.v1 as components
 from datetime import datetime
 
 # =========================================================
-# 1. SAYFA YAPILANDIRMASI
+# 1. SAYFA YAPILANDIRMASI VE GÜVENLİK
 # =========================================================
 st.set_page_config(
-    page_title="Şimşek Lojistik | Enterprise Live Spreadsheet",
+    page_title="ŞimşekLog | Enterprise Supply Chain OS",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# --- JAVASCRIPT: STREAMLIT BULUT ROZETLERİNİ SİLME ---
+components.html("""
+<script>
+    function removeBadges() {
+        try {
+            const parentDoc = window.parent.document;
+            const selectors = [
+                'div[class*="viewerBadge"]', 'div[class*="profileContainer"]',
+                'div[class*="stAppFooter"]', 'footer', '[data-testid="stStatusWidget"]',
+                '[data-testid="stDecoration"]', 'a[href*="streamlit.io"]', 'a[href*="github.com"]'
+            ];
+            selectors.forEach(selector => {
+                parentDoc.querySelectorAll(selector).forEach(el => {
+                    el.style.setProperty('display', 'none', 'important');
+                    el.style.setProperty('opacity', '0', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
+                });
+            });
+        } catch (e) {}
+    }
+    removeBadges();
+    setInterval(removeBadges, 500);
+</script>
+""", height=0, width=0)
+
 # =========================================================
-# 2. GLOBAL CSS VE ARAYÜZ STİLLERİ
+# 2. GLOBAL CSS VE EXECUTIVE DARK TEMA
 # =========================================================
 st.markdown("""
 <style>
-    /* Streamlit Üst Menü ve Alt Bilgi Temizliği */
-    .stAppHeader, #MainMenu, footer, header {
-        display: none !important;
-        visibility: hidden !important;
-    }
+    /* Üst menü ve default ayarları gizle */
+    .stAppHeader, #MainMenu, footer, header { display: none !important; }
+    
+    /* Arka plan ve genel yapı */
+    .stApp { background-color: #050b14 !important; color: #f8fafc; font-family: 'Segoe UI', sans-serif; }
+    .block-container { padding: 1rem 1.5rem !important; max-width: 100% !important; }
 
-    .stApp {
-        background-color: #080d1a !important;
-        color: #f8fafc;
-    }
-    .block-container {
-        padding: 0.8rem 1.2rem !important;
-        max-width: 100% !important;
-    }
-
-    /* Sol Sidebar Tasarımı */
-    [data-testid="stSidebar"] {
-        background-color: #0f172a !important;
-        border-right: 1px solid #1e293b !important;
-    }
+    /* Sol Sidebar Tasarımı (Dark Executive) */
+    [data-testid="stSidebar"] { background-color: #0a1120 !important; border-right: 1px solid #1e293b !important; }
+    div[data-testid="stRadio"] > div { gap: 8px; }
     div[data-testid="stRadio"] label {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 8px;
-        padding: 10px 14px;
-        color: #94a3b8;
-        font-weight: 600;
-        cursor: pointer;
-        margin-bottom: 4px;
+        background-color: #111827; border: 1px solid #1f2937; border-radius: 8px;
+        padding: 12px 15px; color: #94a3b8; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
     }
+    div[data-testid="stRadio"] label:hover { border-color: #38bdf8; color: #e2e8f0; }
     div[data-testid="stRadio"] label[data-checked="true"] {
-        background-color: #0284c7 !important;
-        border-color: #38bdf8 !important;
-        color: #ffffff !important;
+        background: linear-gradient(90deg, #0f172a, #0369a1) !important;
+        border-left: 4px solid #38bdf8 !important; border-color: #0284c7 !important; color: #ffffff !important;
     }
 
-    /* Header Banner */
-    .excel-header {
+    /* VIP Header Banner */
+    .vip-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 12px 20px;
-        margin-bottom: 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        border: 1px solid #334155; border-radius: 12px; padding: 15px 25px;
+        margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.5);
     }
 
-    /* Metrik Kartlar */
-    .kpi-card {
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 8px;
-        padding: 10px;
-        text-align: center;
+    /* Metrik Kartları (Glassmorphism) */
+    .metric-card {
+        background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(10px);
+        border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 10px;
+        padding: 15px; text-align: center; transition: transform 0.2s;
     }
+    .metric-card:hover { transform: translateY(-3px); border-color: #38bdf8; }
+    
+    /* Renk Kodları */
+    .c-ozmal { color: #34d399; font-weight: bold; }
+    .c-tedarik { color: #f97316; font-weight: bold; }
+    .c-alert { color: #f43f5e; font-weight: bold; }
+    .c-info { color: #38bdf8; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. VERİTABANI YÖNETİMİ (SQLite)
+# 3. VERİTABANI VE İLK KURULUM (SQLite)
 # =========================================================
-DB_FILE = "saha_operasyon.db"
+DB_FILE = "simsek_os.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
+    # Canlı Sevkiyat Tablosu
     c.execute('''
-        CREATE TABLE IF NOT EXISTS matris (
+        CREATE TABLE IF NOT EXISTS sevkiyat (
             sira INTEGER PRIMARY KEY AUTOINCREMENT,
-            hat1_ozel TEXT,
-            hat2_genel TEXT,
-            eyap_silis TEXT,
-            guub_cimento TEXT,
-            isken_komur TEXT,
-            tosyali_cevher TEXT
+            ekinciler_liman TEXT, tosyali_liman TEXT, liman_depo TEXT,
+            erw_isdemir TEXT, kademe_soforsuz TEXT
         )
     ''')
-    c.execute("SELECT COUNT(*) FROM matris")
+    # Öz Mal Filo & Şoför Tablosu
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS filo (
+            plaka TEXT PRIMARY KEY, dorse TEXT, tip TEXT,
+            sofor_1 TEXT, sofor_2 TEXT, grup TEXT, durum TEXT
+        )
+    ''')
+    
+    c.execute("SELECT COUNT(*) FROM sevkiyat")
     if c.fetchone()[0] == 0:
-        ornek_veri = [
-            ("31 ANM 573", "31 ANM 593", "31 ANK 374", "31 AAG 291", "31 ANM 598", "31 ANN 331"),
-            ("31 ANN 019", "31 ANN 168", "31 ANL 936", "31 AKL 553", "31 AIU 808", "31 AOK 866"),
-            ("31 ANM 150", "31 ANN 304", "31 ANM 576", "31 AKL 554", "31 AIU 869", "31 AKL 556"),
-            ("31 AOB 800", "31 ANN 312", "31 ANN 284", "31 AKL 852", "31 ANK 278", "31 ANM 210"),
-            ("31 AIU 820", "31 ANV 235", "31 ANR 925", "31 AKL 862", "31 ANM 584", "31 AIY 548"),
-            ("31 AKL 545", "31 ANV 253", "31 ANR 938", "31 ANJ 636", "31 ANN 358", "31 AOV 949")
+        ornek_sevk = [
+            ("31 ANM 573", "31 ANM 598", "31 AHA 468", "31 AKL 543", "31 ANM 257"),
+            ("31 ANN 019", "31 AIU 808", "31 ANB 271", "31 AAG 303", "31 ANM 569"),
+            ("31 ANM 150", "31 ANN 331", "31 ALT 641", "31 AJG 461", "31 ASZ 257")
         ]
-        c.executemany("INSERT INTO matris (hat1_ozel, hat2_genel, eyap_silis, guub_cimento, isken_komur, tosyali_cevher) VALUES (?,?,?,?,?,?)", ornek_veri)
+        c.executemany("INSERT INTO sevkiyat (ekinciler_liman, tosyali_liman, liman_depo, erw_isdemir, kademe_soforsuz) VALUES (?,?,?,?,?)", ornek_sevk)
+        
+        ornek_filo = [
+            ("31 AIU 820", "31 KOD 50", "Damper", "ABDİL BAYRAMBEĞ", "MEHMET KAYA", "MUHİTTİN ERGAN", "AKTİF"),
+            ("31 ANK 374", "31 KNS 14", "Damper", "MEHMET BOZOK", "SERVET ÖZSOY", "MUHİTTİN ERGAN", "AKTİF"),
+            ("31 ANM 257", "31 KNS 37", "Sal", "HÜSEYİN TEMİZ", "HARUN KAHLAR", "KEMAL UZUNOĞLU", "KADEME"),
+            ("31 ANF 677", "31 KMN 88", "Lowbed", "HÜSEYİN F. PARLAK", "CUMALİ BUZ", "FATİH MAHMUTOĞLU", "AKTİF")
+        ]
+        c.executemany("INSERT INTO filo (plaka, dorse, tip, sofor_1, sofor_2, grup, durum) VALUES (?,?,?,?,?,?,?)", ornek_filo)
         conn.commit()
     conn.close()
 
-def load_data():
+init_db()
+
+def load_data(table):
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM matris", conn)
+    df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
     conn.close()
     return df
 
-def save_data(df):
+def save_data(df, table):
     conn = sqlite3.connect(DB_FILE)
-    df.to_sql("matris", conn, if_exists="replace", index=False)
+    df.to_sql(table, conn, if_exists="replace", index=False)
     conn.commit()
     conn.close()
 
-init_db()
-if "df_matris" not in st.session_state:
-    st.session_state.df_matris = load_data()
+if "df_sevkiyat" not in st.session_state: st.session_state.df_sevkiyat = load_data("sevkiyat")
+if "df_filo" not in st.session_state: st.session_state.df_filo = load_data("filo")
 
 # =========================================================
-# 4. NAVİGASYON PANELSİ
+# 4. SOL NAVİGASYON (SİDEBAR)
 # =========================================================
 with st.sidebar:
     st.markdown("""
-        <div style="text-align: center; padding-bottom: 5px;">
-            <h2 style="color: #38bdf8; margin:0; font-weight:800;">⚡ ŞİMŞEK LOGISTICS</h2>
-            <span style="color: #64748B; font-size: 0.75rem; font-weight:600;">ENTERPRISE SAAS PORTAL</span>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #38bdf8; margin:0; font-weight:900; letter-spacing: 1px;">⚡ ŞimşekLog</h2>
+            <span style="color: #64748B; font-size: 0.75rem; font-weight:700;">SUPPLY CHAIN OS v4.0</span>
         </div>
     """, unsafe_allow_html=True)
-    st.divider()
     
-    secilen_menu = st.radio(
-        "NAVİGASYON",
+    menu = st.radio(
+        "MODÜLLER",
         [
-            "📊 Canlı E-Tablo Matrisi",
-            "🚚 Filo & Vardiya Yönetimi",
-            "🗄️ Veritabanı Hammaddeleri",
-            "➕ Hızlı Kayıt Ekle"
+            "📊 Dashboard & Yönetici Özeti",
+            "🟢 Canlı Sevkiyat Matrisi (Grid)",
+            "🚍 Master Filo & Öz Mal (HR)",
+            "👥 Vardiya Amirleri & İK",
+            "🚨 Kademe, Muayene & Lastik",
+            "💼 Finans, Faturalama & Ciro",
+            "🌐 B2B E-Ticaret & Kurye Ağı"
         ],
         label_visibility="collapsed"
     )
+    
+    st.divider()
+    st.markdown("""
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
+            <span style="color: #34d399; font-size: 0.75rem; font-weight: 700;">● CLOUD SYNCED | 08:00 - 08:00</span>
+        </div>
+    """, unsafe_allow_html=True)
 
-# Header
-bugun_tarih = datetime.now().strftime("%d.%m.%Y")
-df_current = st.session_state.df_matris
-
+# Üst Header
 st.markdown(f"""
-<div class="excel-header">
+<div class="vip-header">
     <div>
-        <h3 style="margin:0; color:#38bdf8;">⚡ ŞİMŞEK LOJİSTİK — {secilen_menu.upper()}</h3>
-        <span style="color:#94a3b8; font-size:0.85rem;">Gerçek Zamanlı Saha & Sevkiyat Yönetim Ekranı</span>
+        <h3 style="margin:0; color:#38bdf8; font-weight:800;">{menu.upper()}</h3>
+        <span style="color:#94a3b8; font-size:0.85rem;">ŞimşekLog Merkezi Karar Destek & Lojistik ERP Sistemi</span>
     </div>
-    <div style="text-align:right; color:#34d399; font-weight:600;">
-        ● CANLI İSTASYON ({bugun_tarih})
+    <div style="text-align:right;">
+        <span style="color:#f8fafc; font-weight:bold; font-size:1.1rem;">{datetime.now().strftime("%d.%m.%Y")}</span><br>
+        <span style="color:#34d399; font-size:0.8rem; font-weight:600;">API BAĞLANTISI AKTİF</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. MODÜL İÇERİKLERİ
+# 5. MODÜLLERİN İŞLEVSELLİĞİ
 # =========================================================
 
-# --- MODÜL 1: MAX LEVEL CANLI E-TABLO ---
-if secilen_menu == "📊 Canlı E-Tablo Matrisi":
+# ---------------------------------------------------------
+# MODÜL 1: DASHBOARD
+# ---------------------------------------------------------
+if menu == "📊 Dashboard & Yönetici Özeti":
+    st.subheader("Günün Lojistik ve Finansal Röntgeni")
     
-    # Anlık Metrik Hesaplama
-    c1, c2, c3, c4, c5 = st.columns(5)
-    cols = ['hat1_ozel', 'hat2_genel', 'eyap_silis', 'guub_cimento', 'isken_komur', 'tosyali_cevher']
-    counts = {col: df_current[col].replace('', None).dropna().count() for col in cols}
-    
-    with c1:
-        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT</span><br><b style="color:#38bdf8; font-size:1.15rem;">{counts["hat1_ozel"] + counts["hat2_genel"]} Araç</b></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS)</span><br><b style="color:#34d399; font-size:1.15rem;">{counts["eyap_silis"]} Araç</b></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.15rem;">{counts["guub_cimento"]} Araç</b></div>', unsafe_allow_html=True)
-    with c4:
-        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">ISKEN (KÖMÜR)</span><br><b style="color:#a855f7; font-size:1.15rem;">{counts["isken_komur"]} Araç</b></div>', unsafe_allow_html=True)
-    with c5:
-        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">TOSYALI (CEVHER)</span><br><b style="color:#f43f5e; font-size:1.15rem;">{counts["tosyali_cevher"]} Araç</b></div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ARAÇ ÇUBUĞU (Arama, Excel İndir, Boş Temizle)
-    t_col1, t_col2, t_col3, t_col4 = st.columns([3, 1, 1, 1])
-    
-    with t_col1:
-        arama_termi = st.text_input("🔍 Plaka Arama / Filtreleme:", placeholder="Örn: 31 ANM...").upper()
-    
-    with t_col2:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        csv_data = st.session_state.df_matris.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Excel/CSV İndir", csv_data, "sevkiyat_matrisi.csv", "text/csv", use_container_width=True)
-
-    with t_col3:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        if st.button("➕ 5 Satır Ekle", use_container_width=True):
-            yeni_satirlar = pd.DataFrame([{"sira": None, "hat1_ozel": "", "hat2_genel": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": ""} for _ in range(5)])
-            st.session_state.df_matris = pd.concat([st.session_state.df_matris, yeni_satirlar], ignore_index=True)
-            st.rerun()
-
-    with t_col4:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        if st.button("🧹 Boşları Temizle", use_container_width=True):
-            # Tümü boş olan satırları filtrele
-            st.session_state.df_matris = st.session_state.df_matris.dropna(how='all', subset=cols)
-            save_data(st.session_state.df_matris)
-            st.rerun()
-
-    # Arama Filtreleme Mantığı
-    display_df = st.session_state.df_matris.copy()
-    if arama_termi:
-        mask = display_df.apply(lambda row: row.astype(str).str.contains(arama_termi, case=False).any(), axis=1)
-        display_df = display_df[mask]
-
-    # Canlı E-Tablo Matrisi
-    column_configuration = {
-        "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
-        "hat1_ozel": st.column_config.TextColumn("MMK - HAT 1 (ÖZEL)", width="medium"),
-        "hat2_genel": st.column_config.TextColumn("MMK - HAT 2 (GENEL)", width="medium"),
-        "eyap_silis": st.column_config.TextColumn("EYAP (SİLİS KUMU)", width="medium"),
-        "guub_cimento": st.column_config.TextColumn("GÜUB (ÇİMENTO)", width="medium"),
-        "isken_komur": st.column_config.TextColumn("ISKEN (KÖMÜR)", width="medium"),
-        "tosyali_cevher": st.column_config.TextColumn("TOSYALI (CEVHER)", width="medium"),
-    }
-
-    edited_df = st.data_editor(
-        display_df,
-        column_config=column_configuration,
-        num_rows="dynamic",
-        use_container_width=True,
-        height=540,
-        hide_index=True
-    )
-
-    # Kaydetme Butonu
-    if st.button("💾 Değişiklikleri Veritabanına Kaydet", type="primary", use_container_width=True):
-        if not arama_termi:
-            st.session_state.df_matris = edited_df
-            save_data(edited_df)
-            st.success("✅ Veritabanı başarıyla senkronize edildi!")
-            st.rerun()
-        else:
-            st.warning("Arama modundayken kaydetme yapılamaz. Lütfen arama kutusunu temizleyiniz.")
-
-# --- MODÜL 2: FİLO & VARDİYA ---
-elif secilen_menu == "🚚 Filo & Vardiya Yönetimi":
-    st.subheader("📋 Vardiya Amirleri & Saha Notları")
-    st.info("📋 **AKTİF VARDİYA AMİRLERİ:** SİNAN GÜL // MUSTAFA ÇETİN")
-    
-    v1, v2 = st.columns(2)
-    with v1:
-        st.selectbox("🕒 Aktif Vardiya:", ["08:00 - 16:00 (Gündüz)", "16:00 - 24:00 (Akşam)", "00:00 - 08:00 (Gece)"])
-        st.number_input("Saha Personel Sayısı:", value=12)
-    with v2:
-        st.text_area("📍 Operasyon Vardiya Notu:", "İskenderun liman bölgesinde sevkiyat akışı kesintisiz devam etmektedir.")
-
-# --- MODÜL 3: VERİTABANI YÖNETİMİ ---
-elif secilen_menu == "🗄️ Veritabanı Hammaddeleri":
-    st.subheader("🗄️ SQLite Veritabanı Ham Kayıt Paneli (`saha_operasyon.db`)")
-    st.dataframe(load_data(), use_container_width=True, height=400)
+    m1, m2, m3, m4 = st.columns(4)
+    with m1: st.markdown('<div class="metric-card"><span style="color:#94a3b8;">Günlük Çekilen Tonaj</span><br><b style="color:#38bdf8; font-size:1.5rem;">4,250 Ton</b></div>', unsafe_allow_html=True)
+    with m2: st.markdown('<div class="metric-card"><span style="color:#94a3b8;">Öz Mal Verimlilik %</span><br><b class="c-ozmal" style="font-size:1.5rem;">%84.5</b></div>', unsafe_allow_html=True)
+    with m3: st.markdown('<div class="metric-card"><span style="color:#94a3b8;">Aktif / Yatan Araç</span><br><b style="color:#e2e8f0; font-size:1.5rem;">159 / <span class="c-alert">5</span></b></div>', unsafe_allow_html=True)
+    with m4: st.markdown('<div class="metric-card"><span style="color:#94a3b8;">Est. Günlük Hakediş</span><br><b style="color:#facc15; font-size:1.5rem;">₺ 850,000</b></div>', unsafe_allow_html=True)
     
     st.divider()
-    if st.button("🚨 Veritabanını Varsayılan Duruma Getir"):
-        if os.path.exists(DB_FILE):
-            os.remove(DB_FILE)
-        init_db()
-        st.session_state.df_matris = load_data()
-        st.success("Veritabanı sıfırlandı ve fabrika ayarlarına dönüldü.")
-        st.rerun()
+    st.markdown("#### 🚨 Akıllı Uyarılar & Darboğazlar")
+    st.warning("⚠️ **Tosyalı Limanı (Matilda GS):** Son 1 saatte kantar bekleme süresi ortalama 42 dakikaya çıktı! Araçları Fazlara yönlendirin.")
+    st.error("🚨 **Eksik Vardiya:** 31 ANM 569 (Şoförsüz) ve 31 ANM 257 (Arızalı) bugün sahaya çıkamadı. Günlük Ziyan Maliyeti: ~₺8,500.")
+    st.info("📲 **08:00 Raporu Hazır:** Vardiya sonu özet raporu patronların WhatsApp hattına gönderilmek üzere kuyrukta.")
 
-# --- MODÜL 4: HIZLI KAYIT EKLE ---
-elif secilen_menu == "➕ Hızlı Kayıt Ekle":
-    st.subheader("➕ Veritabanına Tekil Sevkiyat Kaydı Ekle")
+# ---------------------------------------------------------
+# MODÜL 2: CANLI SEVKİYAT MATRİSİ (MAX DÜZEY GRID)
+# ---------------------------------------------------------
+elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
     
-    with st.form("yeni_kayit_formu"):
-        f1, f2 = st.columns(2)
-        with f1:
-            yeni_plaka = st.text_input("Plaka Giriniz:", placeholder="Örn: 31 ANM 999").upper()
-        with f2:
-            hedef_tesis = st.selectbox(
-                "Atanacak Tesis / Hat Seçiniz:",
-                [
-                    ("hat1_ozel", "MMK - HAT 1 (ÖZEL)"),
-                    ("hat2_genel", "MMK - HAT 2 (GENEL)"),
-                    ("eyap_silis", "EYAP (SİLİS KUMU)"),
-                    ("guub_cimento", "GÜUB (ÇİMENTO)"),
-                    ("isken_komur", "ISKEN (KÖMÜR)"),
-                    ("tosyali_cevher", "TOSYALI (CEVHER)")
-                ],
-                format_func=lambda x: x[1]
-            )
+    # Tool Bar
+    t1, t2, t3, t4 = st.columns([3, 1, 1, 1])
+    with t1:
+        arama = st.text_input("🔍 Hızlı Plaka / Tesis Arama:", placeholder="Araç veya dorse yazın...").upper()
+    with t2:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        csv = st.session_state.df_sevkiyat.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Excel İndir", csv, "Canli_Sevkiyat.csv", "text/csv", use_container_width=True)
+    with t3:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("➕ 5 Satır Ekle", use_container_width=True):
+            boslar = pd.DataFrame([{"sira": None, "ekinciler_liman": "", "tosyali_liman": "", "liman_depo": "", "erw_isdemir": "", "kademe_soforsuz": ""} for _ in range(5)])
+            st.session_state.df_sevkiyat = pd.concat([st.session_state.df_sevkiyat, boslar], ignore_index=True)
+            st.rerun()
+    with t4:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("🧹 Boşları Temizle", use_container_width=True):
+            cols_check = ['ekinciler_liman', 'tosyali_liman', 'liman_depo', 'erw_isdemir', 'kademe_soforsuz']
+            st.session_state.df_sevkiyat = st.session_state.df_sevkiyat.dropna(how='all', subset=cols_check)
+            st.rerun()
+
+    # Filtreleme
+    df_disp = st.session_state.df_sevkiyat.copy()
+    if arama:
+        mask = df_disp.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
+        df_disp = df_disp[mask]
+
+    st.caption("💡 *Tedarikçi araçları eklediğinizde sistem renk kodunu otomatik atar. OCR ile fiş okumak için mobil girişi kullanın.*")
+    
+    config = {
+        "sira": st.column_config.NumberColumn("SIRA", disabled=True),
+        "ekinciler_liman": st.column_config.TextColumn("EKİNCİLER (HURDA)", width="medium"),
+        "tosyali_liman": st.column_config.TextColumn("TOSYALI (MATILDA/EVA)", width="medium"),
+        "liman_depo": st.column_config.TextColumn("LİMAN DEPO (FAZLAR)", width="medium"),
+        "erw_isdemir": st.column_config.TextColumn("ERW / İSDEMİR / OSM", width="medium"),
+        "kademe_soforsuz": st.column_config.TextColumn("🚨 KADEME / ŞOFÖRSÜZ", width="medium"),
+    }
+    
+    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=450, hide_index=True)
+    
+    if st.button("💾 Matrisi Veritabanına Senkronize Et", type="primary"):
+        if not arama:
+            st.session_state.df_sevkiyat = edited
+            save_data(edited, "sevkiyat")
+            st.success("Bulut Senkronizasyonu Başarılı!")
+            st.rerun()
+        else:
+            st.warning("Arama yaparken kaydetme yapılamaz.")
+
+# ---------------------------------------------------------
+# MODÜL 3: MASTER FİLO & ÖZ MAL (HR)
+# ---------------------------------------------------------
+elif menu == "🚍 Master Filo & Öz Mal (HR)":
+    st.subheader("Öz Mal Envanteri & Çift Şoför Zimmetleri")
+    st.caption("Amortismanı ve kaskosu ödenen demirbaş araçlar. **Dorse tipleri:** Damper (Sarı), Sal (Mavi), Lowbed (Kırmızı).")
+    
+    df_f = st.session_state.df_filo
+    st.dataframe(df_f, use_container_width=True, hide_index=True, height=400)
+    
+    st.markdown("#### ➕ Öz Mal Garajına Yeni Araç Ekle")
+    with st.form("yeni_arac"):
+        c1, c2, c3, c4 = st.columns(4)
+        np = c1.text_input("Çekici Plaka").upper()
+        nd = c2.text_input("Dorse Plaka").upper()
+        nt = c3.selectbox("Dorse Tipi", ["Damper", "Sal", "Lowbed", "Havuz", "Kılçık", "Kamyon"])
+        ng = c4.selectbox("Bağlı Olduğu Amir", ["MUHİTTİN ERGAN", "BİLAL YOLDAŞ", "KEMAL UZUNOĞLU", "FATİH MAHMUTOĞLU"])
         
-        btn_kaydet = st.form_submit_button("➕ Veritabanına İşle", type="primary", use_container_width=True)
-        if btn_kaydet:
-            if yeni_plaka.strip():
+        if st.form_submit_button("Garaja Ekle", type="primary"):
+            if np:
                 conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                c.execute(f"INSERT INTO matris ({hedef_tesis[0]}) VALUES (?)", (yeni_plaka.strip(),))
-                conn.commit()
-                conn.close()
-                st.session_state.df_matris = load_data()
-                st.success(f"✅ **{yeni_plaka}** plakası **{hedef_tesis[1]}** alanına eklendi!")
+                conn.execute("INSERT INTO filo (plaka, dorse, tip, grup, durum) VALUES (?,?,?,?,?)", (np, nd, nt, ng, "AKTİF"))
+                conn.commit(); conn.close()
+                st.session_state.df_filo = load_data("filo")
                 st.rerun()
-            else:
-                st.warning("Lütfen geçerli bir plaka giriniz.")
+
+# ---------------------------------------------------------
+# MODÜL 4: VARDİYA AMİRLERİ & İK
+# ---------------------------------------------------------
+elif menu == "👥 Vardiya Amirleri & İK":
+    st.subheader("Saha Amiri Grupları ve Şoför Disiplini")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🔴 Muhittin Ergan")
+        st.info("Aktif Araç: 36 | Şoförsüz: 1")
+    with col2:
+        st.markdown("### 🔵 Bilal Yoldaş")
+        st.info("Aktif Araç: 42 | Şoförsüz: 0")
+    with col3:
+        st.markdown("### 🟢 Kemal Uzunoğlu")
+        st.info("Aktif Araç: 39 | Kademe: 2")
+        
+    st.divider()
+    st.markdown("#### 🔄 Geçici Şoför / İzin Girişi")
+    st.write("Vardiyada asıl şoför yerine direksiyona geçen yedek şoförü sisteme işleyin. Performans karnesi yedek şoföre yazılır.")
+    c_p, c_s = st.columns(2)
+    c_p.selectbox("İlgili Araç", ["31 AIU 820", "31 ANM 150", "31 ANK 374"])
+    c_s.text_input("Yedek Şoför Adı Soyadı")
+    st.button("Vardiya Şoförünü Güncelle")
+
+# ---------------------------------------------------------
+# MODÜL 5: KADEME, MUAYENE & LASTİK
+# ---------------------------------------------------------
+elif menu == "🚨 Kademe, Muayene & Lastik":
+    st.subheader("Araç Sağlığı, Arıza Talepleri ve Lastik Yönetimi")
+    
+    tab1, tab2 = st.tabs(["🚨 TÜVTÜRK & Evrak Alarmları", "🛠️ Kademe Arıza Talepleri"])
+    with tab1:
+        st.error("🚨 **31 ANK 374** - Çekici Muayenesi **2 GÜN** geçti! Trafiğe çıkması riskli.")
+        st.warning("⚠️ **31 ANM 598** - Dorse (31 KNS 14) Muayenesine son 12 gün.")
+        st.info("✅ Diğer 162 aracın evrak ve sigortaları tam.")
+    with tab2:
+        st.write("**Açık Arıza Kayıtları:**")
+        st.write("- **31 ANM 257 (Kemal Usta Grubu):** Sağ arka dingil makası kırık. (Durum: Bekliyor)")
+        st.write("- **31 ANM 221 (Muhittin Usta Grubu):** Yağ bakımı ve filtre değişimi. (Durum: İşlemde)")
+        st.button("Yeni Arıza / Bakım Talebi Oluştur")
+
+# ---------------------------------------------------------
+# MODÜL 6: FİNANS & CİRO
+# ---------------------------------------------------------
+elif menu == "💼 Finans, Faturalama & Ciro":
+    st.subheader("Maliyet Kontrol, Yakıt ve Hak Ediş Merkezi")
+    
+    f1, f2 = st.columns(2)
+    with f1:
+        st.markdown("""
+        **🏭 Tosyalı Demir Çelik Ağustos Ayı**
+        * Toplam Hurda: 15,256 Ton
+        * Birim Fiyat: 180 TL/Ton
+        * **Tahmini Kesilecek Fatura: ₺ 2,746,080**
+        """)
+        st.button("📄 Fatura Altlığı İndir (PDF)")
+    with f2:
+        st.markdown("""
+        **⛽ Yakıt Verimlilik Uyarıları**
+        * 31 ANM 112: Ton başına 0.65L (Ortalamanın %15 üstünde! - Şoför uyarıldı)
+        * 31 AIU 820: Ton başına 0.45L (Mükemmel verim - Şoför Prim: +500 TL)
+        """)
+        
+    st.divider()
+    st.write("📲 **Patron WhatsApp Vardiya Özeti (Önizleme):**")
+    st.code("""
+    [ŞimşekLog Otomatik Özet - 12.08.2026 08:05]
+    Sayın Yönetici, gece vardiyası tamamlandı.
+    Tosyalı Hurda: 1.250 Ton
+    Ekinciler Kütük: 850 Ton
+    Filo Verimi: %84.5
+    Yatan Araç: 5 (Zarar: ~8.500 TL)
+    Detaylar panele yüklenmiştir.
+    """, language="markdown")
+
+# ---------------------------------------------------------
+# MODÜL 7: B2B E-TİCARET & KURYE AĞI
+# ---------------------------------------------------------
+elif menu == "🌐 B2B E-Ticaret & Kurye Ağı":
+    st.subheader("Son Kilometre (Last-Mile) E-Ticaret Teslimatları")
+    st.caption("Ağır vasıta dışındaki hafif ticari araçlar ve e-ticaret depo çıkışları.")
+    
+    st.success("✅ **Trendyol API** ve **Hepsiburada API** Bağlantıları Aktif.")
+    st.write("**Aktif Dağıtım Rotası (Yapay Zeka Optimizasyonu):**")
+    st.write("🚚 Araç: 31 ABC 123 (Panelvan) | Kurye: Ahmet Y.")
+    st.write("📦 Toplam Kargo: 45 | Teslim Edilen: 12 | İade: 0")
+    st.progress(12/45)
+    st.button("Rota Optimizasyonunu Yeniden Çalıştır (Trafik Var)")
