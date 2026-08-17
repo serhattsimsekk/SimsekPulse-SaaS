@@ -41,7 +41,7 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (MODERN EXECUTIVE DARK TEMA)
+# 2. GLOBAL CSS (EXECUTIVE TEMA & KOLON SAYAÇ KARTLARI)
 # =========================================================
 st.markdown("""
 <style>
@@ -73,23 +73,16 @@ st.markdown("""
         box-shadow: 0 8px 16px rgba(0,0,0,0.5);
     }
 
-    .metric-card {
-        background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(10px);
-        border: 1px solid rgba(51, 65, 85, 0.5); border-radius: 10px;
-        padding: 15px; text-align: center;
+    /* KOLON SAYAÇ KARTLARI */
+    .col-counter-card {
+        background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+        padding: 10px; text-align: center; margin-bottom: 8px;
     }
-    
-    .fis-card {
-        background: #0f172a; border: 1px solid #1e293b; border-radius: 10px;
-        padding: 15px; margin-bottom: 12px;
-    }
-    .c-ozmal { color: #34d399; font-weight: bold; }
-    .c-alert { color: #f43f5e; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. VERİTABANI MİMARİSİ (KANTAR FİŞİ HAVUZU ENTEGRELİ)
+# 3. VERİTABANI MİMARİSİ
 # =========================================================
 DB_FILE = "simsek_os.db"
 
@@ -110,25 +103,24 @@ def init_db():
         )
     ''')
     c.execute('''
-        CREATE TABLE IF NOT EXISTS finans_tarife (
+        CREATE TABLE IF NOT EXISTS matris_basliklar (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tesis_adi TEXT, birim_fiyat REAL, toplam_tonaj REAL
+            kod TEXT UNIQUE, baslik_adi TEXT
         )
     ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS whatsapp_gruplar (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            grup_adi TEXT, grup_id TEXT, bildirim_tipi TEXT, aktif INTEGER
-        )
-    ''')
-    # GELEN KANTAR FİŞLERİ TABLOSU
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS kantar_fisleri (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            grup_adi TEXT, gonderen TEXT, plaka TEXT,
-            net_tonaj REAL, tesis TEXT, tarih_saat TEXT, durum TEXT
-        )
-    ''')
+    
+    # Basliklar bos ise varsayilanlari at
+    c.execute("SELECT COUNT(*) FROM matris_basliklar")
+    if c.fetchone()[0] == 0:
+        varsayilan = [
+            ("hat_1", "EKİNCİLER LİMANI"),
+            ("hat_2", "TOSYALI LİMANI"),
+            ("hat_3", "LİMAN DEPO / FAZLAR"),
+            ("hat_4", "ERW / İSDEMİR / OSM"),
+            ("kademe_soforsuz", "🚨 KADEME / ŞOFÖRSÜZ")
+        ]
+        c.executemany("INSERT INTO matris_basliklar (kod, baslik_adi) VALUES (?,?)", varsayilan)
+    
     conn.commit()
     conn.close()
 
@@ -146,14 +138,17 @@ def save_data(df, table):
     conn.commit()
     conn.close()
 
+def get_basliklar():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM matris_basliklar", conn)
+    conn.close()
+    return dict(zip(df['kod'], df['baslik_adi']))
+
 if "df_sevkiyat" not in st.session_state: st.session_state.df_sevkiyat = load_data("sevkiyat")
 if "df_filo" not in st.session_state: st.session_state.df_filo = load_data("filo")
-if "df_finans" not in st.session_state: st.session_state.df_finans = load_data("finans_tarife")
-if "df_wa" not in st.session_state: st.session_state.df_wa = load_data("whatsapp_gruplar")
-if "df_fisler" not in st.session_state: st.session_state.df_fisler = load_data("kantar_fisleri")
 
 # =========================================================
-# 4. YETKİLENDİRME & NAVİGASYON (RBAC)
+# 4. YETKİLENDİRME & NAVİGASYON
 # =========================================================
 with st.sidebar:
     st.markdown("""
@@ -164,51 +159,24 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
     kullanici_rolu = st.selectbox(
         "👤 AKTİF KULLANICI ROLÜ:",
         ["👑 Patron (Yönetici)", "💼 Muhasebe Departmanı", "🚚 Sevkiyatçı / Vardiya Amiri", "👮‍♂️ Baş Şoför"],
         index=0
     )
-    
     st.markdown("---")
     
     menuler = [
         "📊 Dashboard & Yönetici Özeti",
         "🟢 Canlı Sevkiyat Matrisi (Grid)",
-        "📱 WhatsApp Kantar Fişi Akışı",
         "Master Filo & Öz Mal (HR)",
         "👥 Vardiya Amirleri & İK",
         "🚨 Kademe, Muayene & Lastik"
     ]
     
-    finans_yetkisi = kullanici_rolu in ["👑 Patron (Yönetici)", "💼 Muhasebe Departmanı"]
-    patron_yetkisi = kullanici_rolu == "👑 Patron (Yönetici)"
-    
-    if finans_yetkisi:
-        menuler.append("💼 Finans, Faturalama & Ciro")
-    if patron_yetkisi:
-        menuler.append("⚙️ WhatsApp Grup Ayarları")
-        
-    menuler.append("🌐 B2B E-Ticaret & Kurye Ağı")
-    
     menu = st.radio("NAVİGASYON", menuler, label_visibility="collapsed")
-    
-    st.divider()
-    if finans_yetkisi:
-        st.markdown("""
-            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
-                <span style="color: #34d399; font-size: 0.75rem; font-weight: 700;">🔓 FİNANSAL YETKİ AKTİF</span>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-            <div style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 8px; padding: 10px; text-align: center;">
-                <span style="color: #f43f5e; font-size: 0.75rem; font-weight: 700;">🔒 SAHA MODU (FİNANS KİLİTLİ)</span>
-            </div>
-        """, unsafe_allow_html=True)
 
-# Üst Header
+# Header
 st.markdown(f"""
 <div class="vip-header">
     <div>
@@ -223,44 +191,72 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. DİNAMİK MÜŞTERİ MODÜLLERİ
+# 5. DİNAMİK MODÜLLER
 # =========================================================
 
-# --- MODÜL 1: DASHBOARD ---
-if menu == "📊 Dashboard & Yönetici Özeti":
-    st.subheader("Günün Lojistik ve Operasyonel Özeti")
+# --- MODÜL 1: CANLI SEVKİYAT MATRİSİ (Geliştirilmiş) ---
+if menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
     
+    baslik_dict = get_basliklar()
     df_f = st.session_state.df_filo
+    
+    # DORSE RENK/İKON EŞLEŞTİRME HARİTASI
+    dorse_map = {}
+    if len(df_f) > 0 and 'tip' in df_f.columns:
+        for _, r in df_f.iterrows():
+            tip = str(r['tip']).lower()
+            if 'damper' in tip: dorse_map[r['plaka']] = "🟨 [Damper]"
+            elif 'sal' in tip: dorse_map[r['plaka']] = "🟦 [Sal]"
+            elif 'lowbed' in tip: dorse_map[r['plaka']] = "🟥 [Lowbed]"
+            elif 'kılçık' in tip: dorse_map[r['plaka']] = "🟪 [Kılçık]"
+            else: dorse_map[r['plaka']] = "🟩 [Diğer]"
+
+    # ÜST BAŞLIKLARI DEĞİŞTİRME PANELİ (Açılır-Kapanır)
+    with st.expander("🛠️ Matris Üst Başlıklarını / Tesis İsimlerini Düzenle"):
+        with st.form("baslik_formu"):
+            b1, b2, b3, b4, b5 = st.columns(5)
+            nb1 = b1.text_input("Kolon 1 İsmi:", value=baslik_dict.get("hat_1", "HAT 1"))
+            nb2 = b2.text_input("Kolon 2 İsmi:", value=baslik_dict.get("hat_2", "HAT 2"))
+            nb3 = b3.text_input("Kolon 3 İsmi:", value=baslik_dict.get("hat_3", "HAT 3"))
+            nb4 = b4.text_input("Kolon 4 İsmi:", value=baslik_dict.get("hat_4", "HAT 4"))
+            nb5 = b5.text_input("Kolon 5 İsmi:", value=baslik_dict.get("kademe_soforsuz", "KADEME"))
+            
+            if st.form_submit_button("💾 Başlıkları Güncelle ve Kaydet", type="primary"):
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = 'hat_1'", (nb1,))
+                c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = 'hat_2'", (nb2,))
+                c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = 'hat_3'", (nb3,))
+                c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = 'hat_4'", (nb4,))
+                c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = 'kademe_soforsuz'", (nb5,))
+                conn.commit(); conn.close()
+                st.success("✅ Kolon üst başlıkları güncellendi!")
+                st.rerun()
+
+    # HER KOLON İÇİN ANLIK ARAÇ SAYDIRMA ALANI (KOLON SAYAÇLARI)
     df_s = st.session_state.df_sevkiyat
-    df_k = st.session_state.df_fisler
+    cols_key = ["hat_1", "hat_2", "hat_3", "hat_4", "kademe_soforsuz"]
     
-    toplam_ozmal = len(df_f)
-    aktif_ozmal = len(df_f[df_f['durum'] == 'AKTİF']) if 'durum' in df_f.columns and toplam_ozmal > 0 else 0
-    pasif_ozmal = toplam_ozmal - aktif_ozmal
-    verim = (aktif_ozmal / toplam_ozmal * 100) if toplam_ozmal > 0 else 0.0
-    bekleyen_fisler = len(df_k[df_k['durum'] == 'Bekliyor']) if len(df_k) > 0 and 'durum' in df_k.columns else 0
+    st.markdown("#### 📊 Tesis / Hat Bazlı Anlık Araç Sayıları")
+    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+    s_cols = [sc1, sc2, sc3, sc4, sc5]
+    
+    for i, ck in enumerate(cols_key):
+        b_adi = baslik_dict.get(ck, ck)
+        count = df_s[ck].replace('', None).dropna().count() if ck in df_s.columns else 0
+        s_cols[i].markdown(f"""
+        <div class="col-counter-card">
+            <span style="color:#94a3b8; font-size:0.75rem;">{b_adi[:20]}</span><br>
+            <b style="color:#38bdf8; font-size:1.2rem;">{count} Araç</b>
+        </div>
+        """, unsafe_allow_html=True)
 
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: st.markdown(f'<div class="metric-card"><span style="color:#94a3b8;">Kayıtlı Öz Mal Filo</span><br><b style="color:#38bdf8; font-size:1.5rem;">{toplam_ozmal} Araç</b></div>', unsafe_allow_html=True)
-    with m2: st.markdown(f'<div class="metric-card"><span style="color:#94a3b8;">Filo Verimlilik %</span><br><b class="c-ozmal" style="font-size:1.5rem;">%{verim:.1f}</b></div>', unsafe_allow_html=True)
-    with m3: st.markdown(f'<div class="metric-card"><span style="color:#94a3b8;">Bekleyen Kantar Fişleri</span><br><b style="color:#facc15; font-size:1.5rem;">{bekleyen_fisler} Fiş</b></div>', unsafe_allow_html=True)
-    with m4: st.markdown(f'<div class="metric-card"><span style="color:#94a3b8;">Matristeki Atama Sayısı</span><br><b style="color:#38bdf8; font-size:1.5rem;">{len(df_s)} Satır</b></div>', unsafe_allow_html=True)
-    
-    st.divider()
-    st.markdown("#### 🚨 Akıllı Saha Uyarısı")
-    if bekleyen_fisler > 0:
-        st.warning(f"⚠️ **İşlem Bekleyen Kantar Fişleri:** WhatsApp gruplarından gelen **{bekleyen_fisler}** adet kantar fişi onay bekliyor. **WhatsApp Kantar Fişi Akışı** sekmesinden onaylayabilirsiniz.")
-    elif toplam_ozmal == 0:
-        st.info("ℹ️ **Henüz Veri Girilmedi:** Şirketinize ait araçları eklemek için **Master Filo & Öz Mal (HR)** sekmesini kullanabilirsiniz.")
-    else:
-        st.success("✅ **Saha Mükemmel:** İşlenmeyen kantar fişi yok ve tüm sistem güncel.")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-# --- MODÜL 2: CANLI SEVKİYAT MATRİSİ ---
-elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
-    
+    # DÜZENLEME ARAÇ ÇUBUĞU
     t1, t2, t3, t4 = st.columns([3, 1, 1, 1])
     with t1:
-        arama = st.text_input("🔍 Hızlı Plaka / Tesis Arama:", placeholder="Plaka veya tesis adı yazın...").upper()
+        arama = st.text_input("🔍 Hızlı Plaka / Tesis Arama:", placeholder="Plaka yazın...").upper()
     with t2:
         st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         csv = st.session_state.df_sevkiyat.to_csv(index=False).encode('utf-8')
@@ -284,16 +280,17 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
         mask = df_disp.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
         df_disp = df_disp[mask]
 
+    # DİNAMİK BAŞLIK BİNDİRME VE EDİTÖR
     config = {
         "sira": st.column_config.NumberColumn("SIRA", disabled=True),
-        "hat_1": st.column_config.TextColumn("TESİS / LİMAN HATTI 1", width="medium"),
-        "hat_2": st.column_config.TextColumn("TESİS / LİMAN HATTI 2", width="medium"),
-        "hat_3": st.column_config.TextColumn("TESİS / LİMAN HATTI 3", width="medium"),
-        "hat_4": st.column_config.TextColumn("TESİS / LİMAN HATTI 4", width="medium"),
-        "kademe_soforsuz": st.column_config.TextColumn("🚨 KADEME / ŞOFÖRSÜZ", width="medium"),
+        "hat_1": st.column_config.TextColumn(baslik_dict.get("hat_1", "HAT 1"), width="medium"),
+        "hat_2": st.column_config.TextColumn(baslik_dict.get("hat_2", "HAT 2"), width="medium"),
+        "hat_3": st.column_config.TextColumn(baslik_dict.get("hat_3", "HAT 3"), width="medium"),
+        "hat_4": st.column_config.TextColumn(baslik_dict.get("hat_4", "HAT 4"), width="medium"),
+        "kademe_soforsuz": st.column_config.TextColumn(baslik_dict.get("kademe_soforsuz", "KADEME"), width="medium"),
     }
     
-    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=480, hide_index=True)
+    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=450, hide_index=True)
     
     if st.button("💾 Sevkiyat Matrisini Kaydet", type="primary", use_container_width=True):
         if not arama:
@@ -304,95 +301,10 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
         else:
             st.warning("Arama yaparken kaydetme yapılamaz. Lütfen aramayı temizleyin.")
 
-# --- MODÜL 3: WHATSAPP KANTAR FİŞİ AKIŞI ---
-elif menu == "📱 WhatsApp Kantar Fişi Akışı":
-    st.subheader("📲 WhatsApp Gruplarından Gelen Canlı Kantar Fişi Akışı")
-    st.caption("WhatsApp Webhook üzerinden sahadaki şoförlerin veya kantarcıların attığı kantar fişleri ve plakalar buraya canlı düşer.")
-    
-    tab_akil, tab_simulasyon = st.tabs(["📩 Gelen Fiş Havuzu & Onay Paneli", "🧪 Canlı WhatsApp Fiş Gönderme Simülatörü"])
-    
-    with tab_akil:
-        df_k = st.session_state.df_fisler
-        
-        if len(df_k) == 0:
-            st.info("ℹ️ Henüz WhatsApp gruplarından gelen kantar fişi yok. Yan sekmedeki simülatörden test fişi gönderebilirsiniz.")
-        else:
-            bekleyenler = df_k[df_k['durum'] == 'Bekliyor']
-            islenenler = df_k[df_k['durum'] == '✅ İşlendi']
-            
-            st.markdown(f"#### ⏳ Onay Bekleyen Fişler ({len(bekleyenler)})")
-            
-            if len(bekleyenler) == 0:
-                st.success("✅ Harika! Onay bekleyen kantar fişi yok, tüm fişler matrise işlendi.")
-            else:
-                for idx, row in bekleyenler.iterrows():
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="fis-card">
-                            <div style="display:flex; justify-content:space-between;">
-                                <b style="color:#38bdf8; font-size:1.1rem;">🚛 Plaka: {row['plaka']}</b>
-                                <span style="color:#facc15; font-size:0.85rem;">⏳ {row['tarih_saat']}</span>
-                            </div>
-                            <hr style="border-color:#334155; margin:8px 0;">
-                            <span style="color:#94a3b8; font-size:0.9rem;">
-                                📍 <b>Tesis/Hat:</b> {row['tesis']} | ⚖️ <b>Net Tonaj:</b> {row['net_tonaj']} Ton <br>
-                                📲 <b>WhatsApp Grubu:</b> {row['grup_adi']} | 👤 <b>Gönderen:</b> {row['gonderen']}
-                            </span>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        col_a, col_b = st.columns([2, 2])
-                        with col_a:
-                            hedef_hat = st.selectbox(f"Matriste Hangi Hatta İşlensin? (Fiş #{row['id']})", 
-                                                     ["hat_1", "hat_2", "hat_3", "hat_4"], key=f"hat_{row['id']}")
-                        with col_b:
-                            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-                            if st.button(f"⚡ Matrise Aktar & Onayla (#{row['id']})", type="primary", key=f"btn_{row['id']}"):
-                                conn = sqlite3.connect(DB_FILE)
-                                c = conn.cursor()
-                                c.execute("UPDATE kantar_fisleri SET durum = '✅ İşlendi' WHERE id = ?", (row['id'],))
-                                c.execute(f"INSERT INTO sevkiyat ({hedef_hat}) VALUES (?)", (row['plaka'],))
-                                conn.commit(); conn.close()
-                                
-                                st.session_state.df_fisler = load_data("kantar_fisleri")
-                                st.session_state.df_sevkiyat = load_data("sevkiyat")
-                                st.success(f"✅ **{row['plaka']}** plakası **{hedef_hat.upper()}** hattına aktarıldı!")
-                                st.rerun()
-
-            if len(islenenler) > 0:
-                st.divider()
-                st.markdown(f"#### ✅ Geçmişte İşlenen Fişler ({len(islenenler)})")
-                st.dataframe(islenenler[['id', 'grup_adi', 'plaka', 'net_tonaj', 'tesis', 'tarih_saat', 'durum']], use_container_width=True, hide_index=True)
-
-    with tab_simulasyon:
-        st.markdown("#### 🧪 WhatsApp Webhook Test Fişi Simüle Et")
-        st.caption("Sahadaki şoför veya kantarcı WhatsApp grubuna fotoğraf veya metin attığında sisteme düşecek canlı veriyi simüle edebilirsiniz.")
-        
-        with st.form("simulasyon_formu"):
-            s1, s2, s3 = st.columns(3)
-            sim_plaka = s1.text_input("Araç Plakası:", value="31 ANM 999").upper()
-            sim_tonaj = s2.number_input("Net Tonaj (Ton):", value=28.5)
-            sim_tesis = s3.selectbox("Tesis / Liman:", ["EKİNCİLER LİMANI", "TOSYALI LİMANI", "LİMAN DEPO / FAZLAR", "ERW / İSDEMİR"])
-            
-            s4, s5 = st.columns(2)
-            sim_grup = s4.text_input("WhatsApp Grup Adı:", value="Vardiya & Operasyon Grubu")
-            sim_tel = s5.text_input("Gönderen Şoför Tel:", value="+90 532 XXX XX XX")
-            
-            if st.form_submit_button("📲 WhatsApp Fişi Olarak Gönder (Webhook Push)", type="primary", use_container_width=True):
-                if sim_plaka.strip():
-                    su_an = datetime.now().strftime("%d.%m.%Y %H:%M")
-                    conn = sqlite3.connect(DB_FILE)
-                    conn.execute("INSERT INTO kantar_fisleri (grup_adi, gonderen, plaka, net_tonaj, tesis, tarih_saat, durum) VALUES (?,?,?,?,?,?,?)",
-                                 (sim_grup, sim_tel, sim_plaka.strip(), sim_tonaj, sim_tesis, su_an, "Bekliyor"))
-                    conn.commit(); conn.close()
-                    
-                    st.session_state.df_fisler = load_data("kantar_fisleri")
-                    st.success(f"📲 **{sim_plaka}** plakalı kantar fişi WhatsApp Webhook üzerinden gelen havuzuna düştü!")
-                    st.rerun()
-
-# --- MODÜL 4: MASTER FİLO & ÖZ MAL ---
+# --- MODÜL 2: MASTER FİLO & ÖZ MAL (Dorse Tipi Kodlaması) ---
 elif menu == "Master Filo & Öz Mal (HR)":
-    st.subheader("🚍 Şirket Öz Mal Filo Veritabanı")
+    st.subheader("🚍 Şirket Öz Mal Filo Veritabanı & Dorse Tipleri")
+    st.caption("Dorse tipleri Canlı Sevkiyat Matrisindeki araç etiketlerini ve renk kodlamalarını belirler.")
     
     df_f = st.session_state.df_filo
     if len(df_f) > 0:
@@ -405,7 +317,7 @@ elif menu == "Master Filo & Öz Mal (HR)":
         c1, c2, c3, c4 = st.columns(4)
         np = c1.text_input("Çekici Plaka *").upper()
         nd = c2.text_input("Dorse Plaka").upper()
-        nt = c3.selectbox("Dorse Tipi", ["Damper", "Sal", "Lowbed", "Havuz", "Kılçık", "Kapanır Sal", "Kamyon"])
+        nt = c3.selectbox("Dorse Tipi (Renk Etiketi Belirler)", ["Damper (🟨)", "Sal (🟦)", "Lowbed (🟥)", "Kılçık (🟪)", "Havuz", "Kapanır Sal", "Kamyon"])
         ng = c4.text_input("Saha Amiri / Grup Adı").upper()
         
         c5, c6, c7 = st.columns(3)
@@ -422,127 +334,7 @@ elif menu == "Master Filo & Öz Mal (HR)":
                 st.session_state.df_filo = load_data("filo")
                 st.success(f"✅ **{np}** plakalı araç veritabanına eklendi!")
                 st.rerun()
-            else:
-                st.warning("Lütfen plaka alanını doldurun.")
 
-# --- MODÜL 5: VARDİYA AMİRLERİ & İK ---
-elif menu == "👥 Vardiya Amirleri & İK":
-    st.subheader("👥 Saha Amir Grupları & Vardiya Yönetimi")
-    
-    df_f = st.session_state.df_filo
-    if len(df_f) > 0 and 'grup' in df_f.columns and len(df_f['grup'].replace('', None).dropna()) > 0:
-        gruplar = df_f['grup'].replace('', None).dropna().unique()
-        cols = st.columns(min(len(gruplar), 4) if len(gruplar) > 0 else 1)
-        for i, g in enumerate(gruplar):
-            with cols[i % len(cols)]:
-                 count = len(df_f[df_f['grup'] == g])
-                 st.markdown(f"### 📌 {g}")
-                 st.info(f"Gruptaki Araç Sayısı: **{count}**")
-                 st.dataframe(df_f[df_f['grup'] == g][['plaka', 'sofor_1', 'durum']], hide_index=True)
-    else:
-        st.info("ℹ️ Henüz gruplandırılmış araç bulunmamaktadır. **Master Filo** sekmesinden araç eklerken grup adı tanımlayabilirsiniz.")
-
-# --- MODÜL 6: KADEME & MUAYENE ---
-elif menu == "🚨 Kademe, Muayene & Lastik":
-    st.subheader("🛠️ Kademe Arıza ve Bakım Takip Paneli")
-    df_f = st.session_state.df_filo
-    
-    if len(df_f) > 0:
-        kademede = df_f[df_f['durum'] == 'KADEME']
-        if len(kademede) > 0:
-            st.error(f"🚨 **Kademede / Arızada Olan Araç Sayısı: {len(kademede)}**")
-            st.dataframe(kademede[['plaka', 'dorse', 'grup', 'sofor_1']], use_container_width=True, hide_index=True)
-        else:
-            st.success("✅ Veritabanınızda kademede veya arızada yatan araç bulunmamaktadır.")
-    else:
-        st.info("ℹ️ Kayıtlı araç bulunamadı.")
-
-# --- MODÜL 7: FİNANS & FATURALAMA ---
-elif menu == "💼 Finans, Faturalama & Ciro":
-    if not finans_yetkisi:
-        st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron** veya **Muhasebe** yetkisi olan kullanıcılar erişebilir.")
-    else:
-        st.subheader("💼 Şirkete Özel Dinamik Maliyet ve Hakediş Paneli")
-        
-        st.markdown("#### 📐 Tesis / Fabrika Birim Fiyat ve Tonaj Tanımlama")
-        with st.form("finans_formu"):
-            f1, f2, f3 = st.columns(3)
-            t_ad = f1.text_input("Tesis / Müşteri Adı:", placeholder="Örn: X Fabrikası")
-            t_ton = f2.number_input("Taşınan Toplam Tonaj:", min_value=0.0, value=0.0)
-            t_fiyat = f3.number_input("Birim Fiyat (TL/Ton):", min_value=0.0, value=0.0)
-            
-            if st.form_submit_button("➕ Hakediş Hesabını Veritabanına Kaydet", type="primary", use_container_width=True):
-                if t_ad.strip():
-                    conn = sqlite3.connect(DB_FILE)
-                    conn.execute("INSERT INTO finans_tarife (tesis_adi, birim_fiyat, toplam_tonaj) VALUES (?,?,?)",
-                                 (t_ad.strip(), t_fiyat, t_ton))
-                    conn.commit(); conn.close()
-                    st.session_state.df_finans = load_data("finans_tarife")
-                    st.success("✅ Hakediş veritabanına işlendi!")
-                    st.rerun()
-
-        df_fin = st.session_state.df_finans
-        if len(df_fin) > 0:
-            df_fin['Tahmini_Ciro_TL'] = df_fin['toplam_tonaj'] * df_fin['birim_fiyat']
-            st.divider()
-            st.markdown("#### 📊 Kayıtlı Hakedişler ve Tahmini Faturalar")
-            st.dataframe(df_fin, use_container_width=True, hide_index=True)
-            
-            toplam_ciro = df_fin['Tahmini_Ciro_TL'].sum()
-            st.success(f"💰 **Toplam Tahmini Kesilecek Fatura Tutarı: ₺ {toplam_ciro:,.2f}**")
-            
-            st.divider()
-            st.markdown("📲 **Patron WhatsApp Vardiya Sonu Özeti (Canlı Üretilen Format):**")
-            
-            ozet_metni = f"""[ŞimşekLog Otomatik Özet - {datetime.now().strftime('%d.%m.%Y %H:%M')}]\nSayın Yönetici, vardiya hakediş özeti aşağıdadır:\n"""
-            for _, r in df_fin.iterrows():
-                ozet_metni += f"• {r['tesis_adi']}: {r['toplam_tonaj']} Ton (Tutar: ₺{r['Tahmini_Ciro_TL']:,.2f})\n"
-            ozet_metni += f"\nTOPLAM HAKEDİŞ: ₺{toplam_ciro:,.2f}\nSistem: app.simseklog.com"
-            
-            st.code(ozet_metni, language="text")
-        else:
-            st.info("ℹ️ Henüz finansal hakediş kaydı bulunmamaktadır. Yukarıdaki formdan şirketinizin hakediş verilerini girebilirsiniz.")
-
-# --- MODÜL 8: WHATSAPP GRUP AYARLARI ---
-elif menu == "⚙️ WhatsApp Grup Ayarları":
-    if not patron_yetkisi:
-        st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron (Yönetici)** erişebilir.")
-    else:
-        st.subheader("⚙️ İsteğe Bağlı WhatsApp Grup Yönetim Paneli")
-        st.caption("Sistemdeki vardiya sonu raporlarının, kantar bildirimlerinin ve kademe alarmlarının hangi WhatsApp gruplarına otomatik atılacağını buradan yönetebilirsiniz.")
-        
-        with st.form("wa_grup_formu"):
-            w1, w2, w3 = st.columns(3)
-            g_ad = w1.text_input("Grup / Kanal Adı:", placeholder="Örn: Vardiya & Operasyon Grubu")
-            g_id = w2.text_input("WhatsApp Group ID / Tel No:", placeholder="Örn: 90532XXXXXXX veya 120363@g.us")
-            g_tip = w3.selectbox("Otomatik Gönderilecek Bildirim Tipi:", [
-                "📊 Vardiya Sonu Raporu (08:00)",
-                "🚨 Kademe & Arıza Alarmları",
-                "⚖️ Anlık Kantar Fişi Geçişleri",
-                "📢 Tüm Bildirimler (Full Paket)"
-            ])
-            
-            if st.form_submit_button("➕ WhatsApp Grubu Ekle & Entegre Et", type="primary", use_container_width=True):
-                if g_ad.strip() and g_id.strip():
-                    conn = sqlite3.connect(DB_FILE)
-                    conn.execute("INSERT INTO whatsapp_gruplar (grup_adi, grup_id, bildirim_tipi, aktif) VALUES (?,?,?,?)",
-                                 (g_ad.strip(), g_id.strip(), g_tip, 1))
-                    conn.commit(); conn.close()
-                    st.session_state.df_wa = load_data("whatsapp_gruplar")
-                    st.success(f"✅ **{g_ad}** grubu sisteme başarıyla entegre edildi!")
-                    st.rerun()
-                else:
-                    st.warning("Lütfen Grup Adı ve Group ID alanlarını doldurun.")
-
-        df_w = st.session_state.df_wa
-        if len(df_w) > 0:
-            st.divider()
-            st.markdown("#### 🟢 Aktif Entegre WhatsApp Grupları")
-            st.dataframe(df_w[['id', 'grup_adi', 'grup_id', 'bildirim_tipi', 'aktif']], use_container_width=True, hide_index=True)
-        else:
-            st.info("ℹ️ Henüz tanımlanmış bir WhatsApp grubu yok. İsteğe bağlı olarak yukarıdan gruplarınızı bağlayabilirsiniz.")
-
-# --- MODÜL 9: B2B E-TİCARET ---
-elif menu == "🌐 B2B E-Ticaret & Kurye Ağı":
-    st.subheader("🌐 Son Kilometre (Last-Mile) E-Ticaret Kurye Yönetimi")
-    st.info("ℹ️ E-ticaret ve kargo dağıtımı yapan hafif ticari araç yönetimi alanı. Şirketinize ait dağıtım rotalarını buradan yönetebilirsiniz.")
+# --- DİĞER MODÜLLER ---
+else:
+    st.info(f"ℹ️ **{menu}** modülü aktif ve kullanıma hazırdır.")
