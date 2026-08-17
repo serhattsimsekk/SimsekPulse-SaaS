@@ -6,11 +6,14 @@ import streamlit.components.v1 as components
 from datetime import datetime
 from collections import Counter
 
+# AgGrid - Gerçek Excel Grid Motoru
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+
 # =========================================================
 # 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
-    page_title="ŞimşekLog | Enterprise Supply Chain OS",
+    page_title="ŞimşekLog | Enterprise Excel OS",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -42,13 +45,14 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (SERBEST SOL MENÜ BUTONU & DARK EXECUTIVE TEMA)
+# 2. GLOBAL CSS (EXCEL DARK ENTERPRISE TEMA)
 # =========================================================
 st.markdown("""
 <style>
     #MainMenu, footer { visibility: hidden !important; }
     .stAppHeader { background: transparent !important; }
     
+    /* Sol menü açma/kapatma butonunu göster */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="collapsedControl"] button {
         background-color: #0f172a !important;
@@ -229,7 +233,7 @@ def check_duplicates(df):
         if col in df.columns:
             for val in df[col].dropna():
                 p = str(val).strip().upper()
-                if p and p != 'NONE' and p != 'NAN':
+                if p and p != 'NONE' and p != 'NAN' and p != '':
                     all_plates.append(p)
     counts = Counter(all_plates)
     return {p: c for p, c in counts.items() if c > 1}
@@ -239,9 +243,6 @@ if "df_filo" not in st.session_state: st.session_state.df_filo = load_data("filo
 if "df_finans" not in st.session_state: st.session_state.df_finans = load_data("finans_tarife")
 if "df_wa" not in st.session_state: st.session_state.df_wa = load_data("whatsapp_gruplar")
 if "df_fisler" not in st.session_state: st.session_state.df_fisler = load_data("kantar_fisleri")
-
-if "history" not in st.session_state:
-    st.session_state.history = [st.session_state.df_excel.copy()]
 
 # =========================================================
 # 4. YETKİLENDİRME & SOL NAVİGASYON (RBAC)
@@ -256,7 +257,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # "DEPARTMAN MÜDÜRÜ" ROLÜ EKLENDİ
     kullanici_rolu = st.selectbox(
         "👤 AKTİF KULLANICI ROLÜ:",
         [
@@ -280,10 +280,7 @@ with st.sidebar:
         "🚨 Kademe, Muayene & Lastik"
     ]
     
-    # FİNANS YETKİSİ: PATRON, DEPARTMAN MÜDÜRÜ VE MUHASEBE
     finans_yetkisi = kullanici_rolu in ["👑 Patron (Yönetici)", "🏢 Departman Müdürü", "💼 Muhasebe Departmanı"]
-    
-    # PATRON ÖZEL YETKİSİ
     patron_yetkisi = kullanici_rolu == "👑 Patron (Yönetici)"
     
     if finans_yetkisi:
@@ -324,7 +321,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. DİNAMİK MODÜLLERİN TAMAMI
+# 5. DİNAMİK MODÜLLER
 # =========================================================
 
 # --- MODÜL 1: DASHBOARD ---
@@ -356,7 +353,7 @@ if menu == "📊 Dashboard & Yönetici Özeti":
     else:
         st.success("✅ **Saha Mükemmel:** İşlenmeyen kantar fişi yok ve tüm sistem güncel.")
 
-# --- MODÜL 2: CANLI SEVKİYAT MATRİSİ (FULL EXCEL DÜZENİ) ---
+# --- MODÜL 2: CANLI SEVKİYAT MATRİSİ (AGGRID REAL EXCEL ENGINE) ---
 elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
     
     cfg = get_header_config()
@@ -430,73 +427,68 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
                 st.success("✅ Tüm başlıklar başarıyla güncellendi!")
                 st.rerun()
 
-    # 6. TOOLBAR VE İNTERAKTİF GRID
-    t1, t2, t3, t4, t5 = st.columns([2.5, 1, 1, 1, 1])
+    # 6. EXCEL GRID TOOLBAR
+    t1, t2, t3, t4 = st.columns([3, 1, 1, 1])
     with t1:
-        arama = st.text_input("🔍 Matriste Plaka Ara:", placeholder="Örn: 31 ANM...").upper()
+        st.caption("💡 **Masaüstü Excel Esnekliği:** Hücreye çift tıklayıp veri yazabilir, `Ctrl+C` ve `Ctrl+V` ile toplu yapıştırabilirsiniz.")
     with t2:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        if st.button("↩️ Geri Al (Ctrl+Z)", use_container_width=True):
-            if len(st.session_state.history) > 1:
-                st.session_state.history.pop()
-                st.session_state.df_excel = st.session_state.history[-1].copy()
-                st.toast("↩️ İşlem geri alındı!")
-                st.rerun()
-            else:
-                st.toast("⚠️ Geri alınacak başka işlem yok.")
-    with t3:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         csv = df_ex.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Excel İndir", csv, "GUNCEL_SEVKIYAT_MATRISI.csv", "text/csv", use_container_width=True)
-    with t4:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+    with t3:
         if st.button("➕ 5 Satır Ekle", use_container_width=True):
             boslar = pd.DataFrame([{"sira": None, "mmk_hat1": "", "mmk_hat2": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": ""} for _ in range(5)])
             yeni_df = pd.concat([st.session_state.df_excel, boslar], ignore_index=True)
             st.session_state.df_excel = yeni_df
-            st.session_state.history.append(yeni_df.copy())
             st.rerun()
-    with t5:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+    with t4:
         if st.button("🧹 Boşları Temizle", use_container_width=True):
             cols_check = [c for c in df_ex.columns if c != 'sira']
             yeni_df = df_ex.dropna(how='all', subset=cols_check)
             st.session_state.df_excel = yeni_df
-            st.session_state.history.append(yeni_df.copy())
             save_data(st.session_state.df_excel, "excel_matris")
             st.rerun()
 
-    df_disp = df_ex.copy()
-    if arama:
-        mask = df_disp.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
-        df_disp = df_disp[mask]
+    # 7. AGGRID GERÇEK EXCEL MOTORU YAPILANDIRMASI
+    gb = GridOptionsBuilder.from_dataframe(df_ex)
+    gb.configure_default_column(editable=True, groupable=True, value=True, enableRowGroup=True, resizable=True, filter=True)
+    gb.configure_column("sira", header_name="SIRA", width=80, editable=False)
+    gb.configure_column("mmk_hat1", header_name="HAT 1 (ÖZEL)", width=150)
+    gb.configure_column("mmk_hat2", header_name="HAT 2 (GENEL)", width=150)
+    gb.configure_column("eyap_silis", header_name="SAHA A (EYAP)", width=150)
+    gb.configure_column("guub_cimento", header_name="SAHA B (GÜUB)", width=150)
+    gb.configure_column("isken_komur", header_name="SAHA C (İSKEN)", width=150)
+    gb.configure_column("tosyali_cevher", header_name="SAHA D (TOSYALI)", width=150)
+    
+    # Kopyala-Yapıştır ve Excel Klavye Kısayollarını Aktif Et
+    gb.configure_grid_options(
+        enableRangeSelection=True,
+        copyHeadersToClipboard=False,
+        undoRedoCellEditing=True,
+        undoRedoCellEditingLimit=20
+    )
+    
+    grid_options = gb.build()
 
-    config = {
-        "sira": st.column_config.NumberColumn("SIRA", disabled=True),
-        "mmk_hat1": st.column_config.TextColumn("HAT 1 (ÖZEL)", width="medium"),
-        "mmk_hat2": st.column_config.TextColumn("HAT 2 (GENEL)", width="medium"),
-        "eyap_silis": st.column_config.TextColumn("SAHA A (EYAP)", width="medium"),
-        "guub_cimento": st.column_config.TextColumn("SAHA B (GÜUB)", width="medium"),
-        "isken_komur": st.column_config.TextColumn("SAHA C (İSKEN)", width="medium"),
-        "tosyali_cevher": st.column_config.TextColumn("SAHA D (TOSYALI)", width="medium"),
-    }
+    grid_response = AgGrid(
+        df_ex,
+        gridOptions=grid_options,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+        fit_columns_on_grid_load=False,
+        theme="balham-dark", # Profesyonel Koyu Excel Teması
+        height=450,
+        reload_data=False
+    )
 
-    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=450, hide_index=True)
-
-    if not edited.equals(st.session_state.df_excel) and not arama:
-        st.session_state.df_excel = edited
-        st.session_state.history.append(edited.copy())
+    updated_df = pd.DataFrame(grid_response['data'])
 
     if st.button("💾 Değişiklikleri Veritabanına Kaydet", type="primary", use_container_width=True):
-        if not arama:
-            st.session_state.df_excel = edited
-            save_data(edited, "excel_matris")
-            st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
-            st.rerun()
-        else:
-            st.warning("Arama yaparken kaydetme yapılamaz. Lütfen arama kutusunu temizleyin.")
+        st.session_state.df_excel = updated_df
+        save_data(updated_df, "excel_matris")
+        st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
+        st.rerun()
 
-    # 7. ALT SEKMELER (ORİJİNAL EXCEL ALT SEKME BARI)
+    # 8. ALT SEKMELER (ORİJİNAL EXCEL ALT SEKME BARI)
     st.markdown("<br>", unsafe_allow_html=True)
     st.caption("📂 EXCEL SAYFA SEKMELERİ:")
     b1, b2, b3, b4, b5 = st.columns(5)
