@@ -1,91 +1,43 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import sqlite3
 import os
 from datetime import datetime
 
 # =========================================================
-# 1. EN ÜSTTE SAYFA YAPILANDIRMASI
+# 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
-    page_title="Şimşek Lojistik | Enterprise Dispatch Portal",
+    page_title="Şimşek Lojistik | Enterprise Live Spreadsheet",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =========================================================
-# 2. SAĞ ALTTAN ROZETLERİ SİLEN JAVASCRIPT ENJEKSİYONU
-# =========================================================
-components.html("""
-<script>
-    function removeStreamlitCloudBadges() {
-        try {
-            const parentDoc = window.parent.document;
-            const selectors = [
-                'div[class*="viewerBadge"]',
-                'div[class*="profileContainer"]',
-                'div[class*="stAppFooter"]',
-                'footer',
-                '[data-testid="stStatusWidget"]',
-                '[data-testid="stDecoration"]',
-                'a[href*="streamlit.io"]',
-                'a[href*="github.com"]'
-            ];
-            selectors.forEach(selector => {
-                const elements = parentDoc.querySelectorAll(selector);
-                elements.forEach(el => {
-                    el.style.setProperty('display', 'none', 'important');
-                    el.style.setProperty('opacity', '0', 'important');
-                    el.style.setProperty('visibility', 'hidden', 'important');
-                });
-            });
-        } catch (e) {
-            // Iframe erişim kontrolü
-        }
-    }
-    // Sayfa açıldığında ve dinamik yüklemelerde sürekli çalıştır
-    removeStreamlitCloudBadges();
-    setInterval(removeStreamlitCloudBadges, 300);
-</script>
-""", height=0, width=0)
-
-# =========================================================
-# 3. GLOBAL CSS STİLLERİ
+# 2. GLOBAL CSS VE ARAYÜZ STİLLERİ
 # =========================================================
 st.markdown("""
 <style>
-    /* Streamlit Üst Header ve Varsayılan Çubukları Gizleme */
+    /* Streamlit Üst Menü ve Alt Bilgi Temizliği */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
     }
 
-    /* Koyu Tema Arka Planı ve Sıfır Boşluk */
     .stApp {
         background-color: #080d1a !important;
         color: #f8fafc;
     }
     .block-container {
-        padding: 1rem 1.5rem !important;
+        padding: 0.8rem 1.2rem !important;
         max-width: 100% !important;
     }
 
-    /* Sol Yan Menü (Sidebar) Özel Tasarımı */
+    /* Sol Sidebar Tasarımı */
     [data-testid="stSidebar"] {
         background-color: #0f172a !important;
         border-right: 1px solid #1e293b !important;
-    }
-    [data-testid="stSidebar"] > div:first-child {
-        padding-top: 1rem !important;
-    }
-
-    /* Sol Menü Radio Butonlarını Buton Kartlarına Dönüştürme */
-    div[data-testid="stRadio"] > div {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
     }
     div[data-testid="stRadio"] label {
         background-color: #1e293b;
@@ -95,11 +47,7 @@ st.markdown("""
         color: #94a3b8;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    div[data-testid="stRadio"] label:hover {
-        border-color: #38bdf8;
-        color: #ffffff;
+        margin-bottom: 4px;
     }
     div[data-testid="stRadio"] label[data-checked="true"] {
         background-color: #0284c7 !important;
@@ -112,27 +60,26 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 1px solid #334155;
         border-radius: 10px;
-        padding: 14px 22px;
+        padding: 12px 20px;
         margin-bottom: 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
     }
 
-    /* İstatistik Sayaç Kartları */
-    .counter-card {
+    /* Metrik Kartlar */
+    .kpi-card {
         background: #0f172a;
         border: 1px solid #1e293b;
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 10px;
         text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 4. VERİTABANI YÖNETİMİ (SQLite)
+# 3. VERİTABANI YÖNETİMİ (SQLite)
 # =========================================================
 DB_FILE = "saha_operasyon.db"
 
@@ -176,44 +123,34 @@ def save_data(df):
     conn.commit()
     conn.close()
 
-def insert_single_record(tesis_column, plaka_no):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    query = f"INSERT INTO matris ({tesis_column}) VALUES (?)"
-    c.execute(query, (plaka_no,))
-    conn.commit()
-    conn.close()
-
 init_db()
 if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
 # =========================================================
-# 5. SOL MENÜ
+# 4. NAVİGASYON PANELSİ
 # =========================================================
 with st.sidebar:
     st.markdown("""
-        <div style="text-align: center; padding-bottom: 10px;">
+        <div style="text-align: center; padding-bottom: 5px;">
             <h2 style="color: #38bdf8; margin:0; font-weight:800;">⚡ ŞİMŞEK LOGISTICS</h2>
-            <span style="color: #64748B; font-size: 0.8rem; font-weight:600;">ENTERPRISE SAAS PORTAL</span>
+            <span style="color: #64748B; font-size: 0.75rem; font-weight:600;">ENTERPRISE SAAS PORTAL</span>
         </div>
     """, unsafe_allow_html=True)
     st.divider()
     
     secilen_menu = st.radio(
-        "NAVİGASYON MENÜSÜ",
+        "NAVİGASYON",
         [
-            "📊 Canlı Sevkiyat Matrisi",
-            "🚚 Filo & Vardiya Amirleri",
-            "🗄️ Veritabanı Yönetimi",
-            "➕ Yeni Araç / Kayıt Ekle"
+            "📊 Canlı E-Tablo Matrisi",
+            "🚚 Filo & Vardiya Yönetimi",
+            "🗄️ Veritabanı Hammaddeleri",
+            "➕ Hızlı Kayıt Ekle"
         ],
         label_visibility="collapsed"
     )
 
-# =========================================================
-# 6. ORTAK ÜST HEADER
-# =========================================================
+# Header
 bugun_tarih = datetime.now().strftime("%d.%m.%Y")
 df_current = st.session_state.df_matris
 
@@ -221,41 +158,72 @@ st.markdown(f"""
 <div class="excel-header">
     <div>
         <h3 style="margin:0; color:#38bdf8;">⚡ ŞİMŞEK LOJİSTİK — {secilen_menu.upper()}</h3>
-        <span style="color:#94a3b8; font-size:0.85rem;">Saha Operasyon & Fleet Dispatch Yönetim Merkezi</span>
+        <span style="color:#94a3b8; font-size:0.85rem;">Gerçek Zamanlı Saha & Sevkiyat Yönetim Ekranı</span>
     </div>
     <div style="text-align:right; color:#34d399; font-weight:600;">
-        ● CANLI SİSTEM ({bugun_tarih})
+        ● CANLI İSTASYON ({bugun_tarih})
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 7. SAYFA İÇERİKLERİ
+# 5. MODÜL İÇERİKLERİ
 # =========================================================
 
-# --- 1. SÜTUN: CANLI SEVKİYAT MATRİSİ ---
-if secilen_menu == "📊 Canlı Sevkiyat Matrisi":
-    count_mmk = df_current['hat1_ozel'].replace('', None).count() + df_current['hat2_genel'].replace('', None).count()
-    count_eyap = df_current['eyap_silis'].replace('', None).count()
-    count_guub = df_current['guub_cimento'].replace('', None).count()
-    count_isken = df_current['isken_komur'].replace('', None).count()
-    count_tosyali = df_current['tosyali_cevher'].replace('', None).count()
-
+# --- MODÜL 1: MAX LEVEL CANLI E-TABLO ---
+if secilen_menu == "📊 Canlı E-Tablo Matrisi":
+    
+    # Anlık Metrik Hesaplama
     c1, c2, c3, c4, c5 = st.columns(5)
+    cols = ['hat1_ozel', 'hat2_genel', 'eyap_silis', 'guub_cimento', 'isken_komur', 'tosyali_cevher']
+    counts = {col: df_current[col].replace('', None).dropna().count() for col in cols}
+    
     with c1:
-        st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT (HURDA)</span><br><b style="color:#38bdf8; font-size:1.15rem;">{count_mmk} Araç</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT</span><br><b style="color:#38bdf8; font-size:1.15rem;">{counts["hat1_ozel"] + counts["hat2_genel"]} Araç</b></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS KUMU)</span><br><b style="color:#34d399; font-size:1.15rem;">{count_eyap} Araç</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS)</span><br><b style="color:#34d399; font-size:1.15rem;">{counts["eyap_silis"]} Araç</b></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.15rem;">{count_guub} Araç</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.15rem;">{counts["guub_cimento"]} Araç</b></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">ISKEN (KÖMÜR)</span><br><b style="color:#a855f7; font-size:1.15rem;">{count_isken} Araç</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">ISKEN (KÖMÜR)</span><br><b style="color:#a855f7; font-size:1.15rem;">{counts["isken_komur"]} Araç</b></div>', unsafe_allow_html=True)
     with c5:
-        st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">TOSYALI (CEVHER)</span><br><b style="color:#f43f5e; font-size:1.15rem;">{count_tosyali} Araç</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><span style="color:#94a3b8; font-size:0.75rem;">TOSYALI (CEVHER)</span><br><b style="color:#f43f5e; font-size:1.15rem;">{counts["tosyali_cevher"]} Araç</b></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.caption("💡 Kısayol Bilgisi: Excel'den hücre kopyalayıp doğrudan `Ctrl+C` ve `Ctrl+V` ile tabloya yapıştırabilirsiniz.")
 
+    # ARAÇ ÇUBUĞU (Arama, Excel İndir, Boş Temizle)
+    t_col1, t_col2, t_col3, t_col4 = st.columns([3, 1, 1, 1])
+    
+    with t_col1:
+        arama_termi = st.text_input("🔍 Plaka Arama / Filtreleme:", placeholder="Örn: 31 ANM...").upper()
+    
+    with t_col2:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        csv_data = st.session_state.df_matris.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Excel/CSV İndir", csv_data, "sevkiyat_matrisi.csv", "text/csv", use_container_width=True)
+
+    with t_col3:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("➕ 5 Satır Ekle", use_container_width=True):
+            yeni_satirlar = pd.DataFrame([{"sira": None, "hat1_ozel": "", "hat2_genel": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": ""} for _ in range(5)])
+            st.session_state.df_matris = pd.concat([st.session_state.df_matris, yeni_satirlar], ignore_index=True)
+            st.rerun()
+
+    with t_col4:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("🧹 Boşları Temizle", use_container_width=True):
+            # Tümü boş olan satırları filtrele
+            st.session_state.df_matris = st.session_state.df_matris.dropna(how='all', subset=cols)
+            save_data(st.session_state.df_matris)
+            st.rerun()
+
+    # Arama Filtreleme Mantığı
+    display_df = st.session_state.df_matris.copy()
+    if arama_termi:
+        mask = display_df.apply(lambda row: row.astype(str).str.contains(arama_termi, case=False).any(), axis=1)
+        display_df = display_df[mask]
+
+    # Canlı E-Tablo Matrisi
     column_configuration = {
         "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
         "hat1_ozel": st.column_config.TextColumn("MMK - HAT 1 (ÖZEL)", width="medium"),
@@ -267,49 +235,53 @@ if secilen_menu == "📊 Canlı Sevkiyat Matrisi":
     }
 
     edited_df = st.data_editor(
-        st.session_state.df_matris,
+        display_df,
         column_config=column_configuration,
         num_rows="dynamic",
         use_container_width=True,
-        height=520,
+        height=540,
         hide_index=True
     )
 
+    # Kaydetme Butonu
     if st.button("💾 Değişiklikleri Veritabanına Kaydet", type="primary", use_container_width=True):
-        st.session_state.df_matris = edited_df
-        save_data(edited_df)
-        st.success("✅ Veritabanı başarıyla güncellendi!")
-        st.rerun()
+        if not arama_termi:
+            st.session_state.df_matris = edited_df
+            save_data(edited_df)
+            st.success("✅ Veritabanı başarıyla senkronize edildi!")
+            st.rerun()
+        else:
+            st.warning("Arama modundayken kaydetme yapılamaz. Lütfen arama kutusunu temizleyiniz.")
 
-# --- 2. SÜTUN: FİLO & VARDİYA AMİRLERİ ---
-elif secilen_menu == "🚚 Filo & Vardiya Amirleri":
-    st.subheader("📋 Vardiya Yönetimi & Saha Notları")
+# --- MODÜL 2: FİLO & VARDİYA ---
+elif secilen_menu == "🚚 Filo & Vardiya Yönetimi":
+    st.subheader("📋 Vardiya Amirleri & Saha Notları")
     st.info("📋 **AKTİF VARDİYA AMİRLERİ:** SİNAN GÜL // MUSTAFA ÇETİN")
     
     v1, v2 = st.columns(2)
     with v1:
-        st.selectbox("🕒 Vardiya Saati:", ["08:00 - 16:00 (Gündüz)", "16:00 - 24:00 (Akşam)", "00:00 - 08:00 (Gece)"])
-        st.number_input("Aktif Saha Personeli Sayısı:", value=8)
+        st.selectbox("🕒 Aktif Vardiya:", ["08:00 - 16:00 (Gündüz)", "16:00 - 24:00 (Akşam)", "00:00 - 08:00 (Gece)"])
+        st.number_input("Saha Personel Sayısı:", value=12)
     with v2:
-        st.text_area("📍 Saha Amiri Operasyon Notu:", "Liman kantarlarında yoğunluk yok, akış normal devam ediyor.")
+        st.text_area("📍 Operasyon Vardiya Notu:", "İskenderun liman bölgesinde sevkiyat akışı kesintisiz devam etmektedir.")
 
-# --- 3. SÜTUN: VERİTABANI YÖNETİMİ ---
-elif secilen_menu == "🗄️ Veritabanı Yönetimi":
-    st.subheader("🗄️ SQLite Veritabanı Ham Kayıtları (`saha_operasyon.db`)")
-    st.dataframe(load_data(), use_container_width=True, height=420)
+# --- MODÜL 3: VERİTABANI YÖNETİMİ ---
+elif secilen_menu == "🗄️ Veritabanı Hammaddeleri":
+    st.subheader("🗄️ SQLite Veritabanı Ham Kayıt Paneli (`saha_operasyon.db`)")
+    st.dataframe(load_data(), use_container_width=True, height=400)
     
     st.divider()
-    if st.button("🚨 Veritabanını Sıfırla ve Örnek Verileri Yükle"):
+    if st.button("🚨 Veritabanını Varsayılan Duruma Getir"):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
         init_db()
         st.session_state.df_matris = load_data()
-        st.success("Veritabanı sıfırlandı ve varsayılan veriler yüklendi.")
+        st.success("Veritabanı sıfırlandı ve fabrika ayarlarına dönüldü.")
         st.rerun()
 
-# --- 4. SÜTUN: YENİ ARAÇ / KAYIT EKLE ---
-elif secilen_menu == "➕ Yeni Araç / Kayıt Ekle":
-    st.subheader("➕ Veritabanına Yeni Sevkiyat Kaydı Ekle")
+# --- MODÜL 4: HIZLI KAYIT EKLE ---
+elif secilen_menu == "➕ Hızlı Kayıt Ekle":
+    st.subheader("➕ Veritabanına Tekil Sevkiyat Kaydı Ekle")
     
     with st.form("yeni_kayit_formu"):
         f1, f2 = st.columns(2)
@@ -329,10 +301,14 @@ elif secilen_menu == "➕ Yeni Araç / Kayıt Ekle":
                 format_func=lambda x: x[1]
             )
         
-        btn_kaydet = st.form_submit_button("➕ Veritabanına Ekle", type="primary", use_container_width=True)
+        btn_kaydet = st.form_submit_button("➕ Veritabanına İşle", type="primary", use_container_width=True)
         if btn_kaydet:
             if yeni_plaka.strip():
-                insert_single_record(hedef_tesis[0], yeni_plaka.strip())
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                c.execute(f"INSERT INTO matris ({hedef_tesis[0]}) VALUES (?)", (yeni_plaka.strip(),))
+                conn.commit()
+                conn.close()
                 st.session_state.df_matris = load_data()
                 st.success(f"✅ **{yeni_plaka}** plakası **{hedef_tesis[1]}** alanına eklendi!")
                 st.rerun()
