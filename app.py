@@ -1,26 +1,32 @@
 import streamlit as st
 
-# Temiz & Kurumsal Arayüz CSS Enjeksiyonu
+# ⚠️ KRİTİK KURAL: set_page_config her zaman İLK Streamlit komutu olmalı!
+st.set_page_config(
+    page_title="Şimşek Lojistik | SimsekPulse Pro",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Kurumsal Görünüm - Menü ve Alt Yazı Temizliği (CSS Enjeksiyonu)
 st.markdown("""
 <style>
-    /* Sağ üstteki Fork, GitHub ve Varsayılan Menüyü Gizle */
+    /* Üst Menü, Header ve Footer Gizleme */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
     }
     
-    /* Sağ alttaki Streamlit Rozetlerini ve İmzaları Yok Et */
-    .viewerBadge_container__1vB22, 
-    .viewerBadge_link__1S137,
+    /* Streamlit Rozetleri ve Toolbar Gizleme */
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
     [data-testid="stToolbar"] {
         display: none !important;
     }
 
-    /* Sayfa Üst Boşluğunu Sıfırla */
+    /* Sayfa Üst Boşluğunu Optimize Etme */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 1rem !important;
     }
 </style>
