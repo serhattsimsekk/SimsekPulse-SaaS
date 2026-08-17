@@ -1,25 +1,31 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+import os
 from datetime import datetime
 
-# 1. EN ÜSTTE SAYFA YAPILANDIRMASI
+# =========================================================
+# 1. EN ÜSTTE OLMASI GEREKEN SAYFA YAPILANDIRMASI
+# =========================================================
 st.set_page_config(
-    page_title="Şimşek Lojistik | Veritabanı Entegreli Saha Matrisi",
+    page_title="Şimşek Lojistik | Enterprise Dispatch & Fleet System",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. TAM KURUMSAL ARAYÜZ VE TEMİZLİK (CSS)
+# =========================================================
+# 2. GLOBAL CSS ENJEKSİYONU (GİZLEME, TEMİZLİK VE KOYU TEMA)
+# =========================================================
 st.markdown("""
 <style>
-    /* Streamlit Menü ve Rozet Temizliği */
+    /* Üst Menü, Header, Footer ve Varsayılan Çubukları Gizleme */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
     }
     
+    /* Sağ Alttaki Profil İkonu, GitHub, Status ve Streamlit Kırmızı Rozetini Temizleme */
     [data-testid="stDecoration"],
     [data-testid="stStatusWidget"],
     [data-testid="stToolbar"],
@@ -35,6 +41,7 @@ st.markdown("""
         pointer-events: none !important;
     }
 
+    /* Koyu Tema Arka Planı ve Sıfır Marjin */
     .stApp {
         background-color: #0b1329 !important;
         color: #f8fafc;
@@ -44,28 +51,29 @@ st.markdown("""
         max-width: 100% !important;
     }
 
-    /* Header Banner */
+    /* Kurumsal Header Banner */
     .excel-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: 1px solid #334155;
         border-radius: 10px;
-        padding: 12px 20px;
+        padding: 14px 22px;
         margin-bottom: 12px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
     }
 
-    /* Sayaç Kartları */
+    /* İstatistik Sayaç Kartları */
     .counter-card {
         background: #1e293b;
         border: 1px solid #334155;
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         text-align: center;
     }
 
-    /* Tab Tasarımı */
+    /* Tab / Sekme Tasarımı */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #0f172a;
@@ -78,6 +86,7 @@ st.markdown("""
         border-radius: 8px;
         color: #94a3b8;
         font-weight: 600;
+        font-size: 0.9rem;
     }
     .stTabs [aria-selected="true"] {
         background-color: #0284c7 !important;
@@ -86,7 +95,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. VERİTABANI YÖNETİM FONKSİYONLARI (SQLite)
+# =========================================================
+# 3. MİGRASYON VE SQLITE VERİTABANI YÖNETİMİ
+# =========================================================
 DB_FILE = "saha_operasyon.db"
 
 def init_db():
@@ -141,7 +152,9 @@ init_db()
 if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
-# 4. ÜST HEADER VE CANLI TARİH
+# =========================================================
+# 4. ÜST PANEL & CANLI DİNAMİK İSTATİSTİKLER
+# =========================================================
 bugun_tarih = datetime.now().strftime("%d.%m.%Y")
 df_current = st.session_state.df_matris
 
@@ -155,7 +168,7 @@ st.markdown(f"""
 <div class="excel-header">
     <div>
         <h3 style="margin:0; color:#38bdf8;">⚡ ŞİMŞEK LOJİSTİK — OTOMASYONLU SEVKİYAT MATRİSİ</h3>
-        <span style="color:#94a3b8; font-size:0.85rem;">Veritabanı Destekli Saha & Fleet Yönetim Paneli</span>
+        <span style="color:#94a3b8; font-size:0.85rem;">Enterprise Fleet & Saha Operasyon Kontrol Merkezi</span>
     </div>
     <div style="text-align:right; color:#34d399; font-weight:600;">
         ● SİSTEM CANLI ({bugun_tarih})
@@ -166,28 +179,31 @@ st.markdown(f"""
 # İstatistik Sayaçları
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT</span><br><b style="color:#38bdf8; font-size:1.1rem;">{count_mmk} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">MMK PORT (HURDA)</span><br><b style="color:#38bdf8; font-size:1.15rem;">{count_mmk} Araç</b></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS)</span><br><b style="color:#34d399; font-size:1.1rem;">{count_eyap} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">EYAP (SİLİS KUMU)</span><br><b style="color:#34d399; font-size:1.15rem;">{count_eyap} Araç</b></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.1rem;">{count_guub} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">GÜUB (ÇİMENTO)</span><br><b style="color:#f25900; font-size:1.15rem;">{count_guub} Araç</b></div>', unsafe_allow_html=True)
 with c4:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">ISKEN (KÖMÜR)</span><br><b style="color:#a855f7; font-size:1.1rem;">{count_isken} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">ISKEN (KÖMÜR)</span><br><b style="color:#a855f7; font-size:1.15rem;">{count_isken} Araç</b></div>', unsafe_allow_html=True)
 with c5:
-    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">TOSYALI (CEVHER)</span><br><b style="color:#f43f5e; font-size:1.1rem;">{count_tosyali} Araç</b></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="counter-card"><span style="color:#94a3b8; font-size:0.75rem;">TOSYALI (CEVHER)</span><br><b style="color:#f43f5e; font-size:1.15rem;">{count_tosyali} Araç</b></div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 5. MODÜLER SEKMELER
-tab_matris, tab_db, tab_ekle = st.tabs([
+# =========================================================
+# 5. MODÜLER ANA SEKMELER
+# =========================================================
+tab_matris, tab_vardiya, tab_db, tab_ekle = st.tabs([
     "📊 CANLI SEVKİYAT MATRİSİ (E-Tablo)",
+    "🚚 FİLO & VARDİYA AMİRLERİ",
     "🗄️ VERİTABANI YÖNETİMİ",
     "➕ YENİ ARAÇ / KAYIT EKLE"
 ])
 
-# --- SEKME 1: CANLI MATRİS (E-TABLO) ---
+# --- SEKME 1: CANLI MATRİS ---
 with tab_matris:
-    st.caption("💡 Kısayol Bilgisi: Excel'den doğrudan hücre seçip `Ctrl+C` ve `Ctrl+V` ile veri kopyalayabilirsiniz.")
+    st.caption("💡 Kısayol Bilgisi: Excel'den doğrudan kopyala-yapıştır yapmak için hücreleri seçip `Ctrl+C` ve `Ctrl+V` kullanabilirsiniz.")
     
     column_configuration = {
         "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
@@ -214,10 +230,21 @@ with tab_matris:
         st.success("✅ Veritabanı başarıyla güncellendi!")
         st.rerun()
 
-# --- SEKME 2: VERİTABANI YÖNETİMİ ---
+# --- SEKME 2: FİLO & VARDİYA ---
+with tab_vardiya:
+    st.subheader("📋 Vardiya Yönetimi & Saha Bilgileri")
+    st.info("📋 **AKTİF VARDİYA AMİRLERİ:** SİNAN GÜL // MUSTAFA ÇETİN")
+    
+    col_v1, col_v2 = st.columns(2)
+    with col_v1:
+        st.selectbox("🕒 Vardiya Saati:", ["08:00 - 16:00 (Gündüz)", "16:00 - 24:00 (Akşam)", "00:00 - 08:00 (Gece)"])
+    with col_v2:
+        st.text_input("📍 Saha Sorumlusu Notu:", "Liman sahasında kantar kuyruğu normal seviyede.")
+
+# --- SEKME 3: VERİTABANI YÖNETİMİ ---
 with tab_db:
     st.subheader("🗄️ SQLite Veritabanı Ham Kayıtları (`saha_operasyon.db`)")
-    st.dataframe(load_data(), use_container_width=True, height=400)
+    st.dataframe(load_data(), use_container_width=True, height=380)
     
     st.divider()
     if st.button("🚨 Veritabanını Sıfırla ve Örnek Verileri Yükle"):
@@ -228,7 +255,7 @@ with tab_db:
         st.success("Veritabanı sıfırlandı ve varsayılan veri yüklendi.")
         st.rerun()
 
-# --- SEKME 3: YENİ ARAÇ / SEVKİYAT EKLE ---
+# --- SEKME 4: YENİ ARAÇ EKLE ---
 with tab_ekle:
     st.subheader("➕ Veritabanına Yeni Sevkiyat Kaydı Ekle")
     
