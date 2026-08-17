@@ -1,3 +1,5 @@
+import streamlit as st
+
 # Temiz & Kurumsal Arayüz CSS Enjeksiyonu
 st.markdown("""
 <style>
