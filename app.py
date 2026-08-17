@@ -326,3 +326,41 @@ elif secilen_menu == "➕ Yeni Araç / Kayıt Ekle":
                 st.rerun()
             else:
                 st.warning("Lütfen geçerli bir plaka giriniz.")
+                import streamlit as st
+
+# 1. EN ÜSTTE CONFIG
+st.set_page_config(
+    page_title="Şimşek Lojistik | Enterprise Dispatch Portal",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 2. HATA VERMEYEN SIFIRLAMA CSS'İ
+st.markdown("""
+<style>
+    /* Üst Menü, Header ve Footer Temizliği */
+    header, footer, .stAppHeader, #MainMenu {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* Kırmızı Rozet ve Profil Avatarını Yok Etme */
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    [data-testid="stToolbar"],
+    [data-testid="stActionButton"],
+    div[class*="viewerBadge"],
+    div[class*="profileContainer"],
+    div[class*="stAppFooter"],
+    a[href*="streamlit.io"],
+    a[href*="github.com"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
