@@ -4,12 +4,13 @@ import sqlite3
 import os
 import streamlit.components.v1 as components
 from datetime import datetime
+from collections import Counter
 
 # =========================================================
 # 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
-    page_title="Şimşek Lojistik | Canlı Saha E-Tablosu",
+    page_title="Şimşek Lojistik | Canlı Saha Matrisi",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -41,23 +42,36 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (SABİT / AÇILIR SOL MENÜ VE TEMA)
+# 2. GLOBAL CSS (EXECUTIVE TEMA & BİLDİRİM KARTLARI)
 # =========================================================
 st.markdown("""
 <style>
-    /* Sadece footer ve marka izlerini gizle, sidebar toggle butonunu SERBEST BIRAK */
-    #MainMenu, footer { visibility: hidden !important; }
+    #MainMenu, footer, [data-testid="stHeader"] { visibility: hidden !important; }
+    .stAppHeader { background: transparent !important; height: 0px !important; }
     
-    .stApp { background-color: #050b14 !important; color: #f8fafc; font-family: 'Segoe UI', sans-serif; }
-    .block-container { padding: 1rem 1.5rem !important; max-width: 100% !important; }
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        visibility: visible !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 999999 !important;
+        background-color: #0f172a !important;
+        border: 1px solid #38bdf8 !important;
+        border-radius: 8px !important;
+        color: #38bdf8 !important;
+        padding: 4px !important;
+    }
 
-    /* YAN MENÜ STİLLERİ */
     [data-testid="stSidebar"] {
         background-color: #0a1120 !important;
         border-right: 1px solid #1e293b !important;
     }
 
-    /* HEADER BANNER */
+    .stApp { background-color: #050b14 !important; color: #f8fafc; font-family: 'Segoe UI', sans-serif; }
+    .block-container { padding: 1rem 1.5rem !important; max-width: 100% !important; }
+
     .excel-main-title {
         background: #0f172a;
         border: 1px solid #334155;
@@ -65,26 +79,52 @@ st.markdown("""
         padding: 10px 20px;
         color: #38bdf8;
         font-weight: 800;
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 
+    .excel-top-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+        gap: 4px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 0.85rem;
+        margin-bottom: 6px;
+    }
+    .head-m1 { background: #1e3a8a; color: #ffffff; padding: 8px; border-radius: 4px; }
+    .head-m2 { background: #0284c7; color: #ffffff; padding: 8px; border-radius: 4px; }
+    .head-m3 { background: #0369a1; color: #ffffff; padding: 8px; border-radius: 4px; }
+    .head-m4 { background: #581c87; color: #ffffff; padding: 8px; border-radius: 4px; }
+    .head-m5 { background: #9a3412; color: #ffffff; padding: 8px; border-radius: 4px; }
+
     .counter-bar {
-        background: #0f172a;
-        border: 1px solid #1e293b;
+        background: #1e293b;
+        border: 1px solid #334155;
         border-radius: 6px;
         padding: 8px;
         text-align: center;
         font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .dup-alarm {
+        background: rgba(244, 63, 94, 0.15);
+        border: 1px solid #f43f5e;
+        color: #fca5a5;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 12px;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. VERİTABANI VE GEÇMİŞ (UNDO / REDO) MİMARİSİ
+# 3. VERİTABANI MİMARİSİ
 # =========================================================
 DB_FILE = "simsek_os.db"
 
@@ -94,30 +134,40 @@ def init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS excel_matris (
             sira INTEGER PRIMARY KEY AUTOINCREMENT,
-            col_1 TEXT, col_2 TEXT, col_3 TEXT,
-            col_4 TEXT, col_5 TEXT, col_6 TEXT
+            mmk_hat1 TEXT, mmk_hat2 TEXT, eyap_silis TEXT,
+            guub_cimento TEXT, isken_komur TEXT, tosyali_cevher TEXT
         )
     ''')
     c.execute('''
-        CREATE TABLE IF NOT EXISTS matris_basliklar (
-            kod TEXT PRIMARY KEY, baslik_adi TEXT
+        CREATE TABLE IF NOT EXISTS header_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            main_title TEXT, vardiya_amirleri TEXT,
+            l1 TEXT, c1 TEXT, l2 TEXT, c2 TEXT,
+            l3 TEXT, c3 TEXT, l4 TEXT, c4 TEXT,
+            l5 TEXT, c5 TEXT
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS filo (
+            plaka TEXT PRIMARY KEY, dorse TEXT, tip TEXT, durum TEXT
         )
     ''')
     
-    # Varsayılan Başlıklar
-    c.execute("SELECT COUNT(*) FROM matris_basliklar")
+    c.execute("SELECT COUNT(*) FROM header_config")
     if c.fetchone()[0] == 0:
-        basliklar = [
-            ("col_1", "MMK - HAT 1 (ÖZEL)"),
-            ("col_2", "MMK - HAT 2 (GENEL)"),
-            ("col_3", "SAHA A (EYAP)"),
-            ("col_4", "SAHA B (GÜUB)"),
-            ("col_5", "SAHA C (İSKEN)"),
-            ("col_6", "SAHA D (TOSYALI)")
-        ]
-        c.executemany("INSERT INTO matris_basliklar (kod, baslik_adi) VALUES (?,?)", basliklar)
+        c.execute('''
+            INSERT INTO header_config (main_title, vardiya_amirleri, l1, c1, l2, c2, l3, c3, l4, c4, l5, c5)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            "ŞİMŞEK LOJİSTİK - İSKENDERUN / DİLOVASI SAHA MATRİSİ",
+            "SİNAN GÜL // MUSTAFA ÇETİN",
+            "MMK PORT / SAHA 1", "HURDA / DÖKME YÜK",
+            "EYAP LİMANI", "SİLİS KUMU",
+            "GÜÜB LİMANI", "ÇİMENTO",
+            "İSKEN SANTRAL", "KÖMÜR",
+            "TOSYALI LİMANI", "CEVHER"
+        ))
 
-    # Varsayılan Veri
     c.execute("SELECT COUNT(*) FROM excel_matris")
     if c.fetchone()[0] == 0:
         ornek = [
@@ -127,195 +177,211 @@ def init_db():
             ("31 AOB 800", "31 ANN 312", "31 ANN 284", "31 AKL 852", "31 ANK 278", "31 ANM 210"),
             ("31 AIU 820", "31 ANV 235", "31 ANR 925", "31 AKL 862", "31 ANM 584", "31 AIY 548")
         ]
-        c.executemany("INSERT INTO excel_matris (col_1, col_2, col_3, col_4, col_5, col_6) VALUES (?,?,?,?,?,?)", ornek)
+        c.executemany("INSERT INTO excel_matris (mmk_hat1, mmk_hat2, eyap_silis, guub_cimento, isken_komur, tosyali_cevher) VALUES (?,?,?,?,?,?)", ornek)
     
     conn.commit()
     conn.close()
 
 init_db()
 
-def load_data():
+def load_data(table):
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM excel_matris", conn)
+    df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
     conn.close()
     return df
 
-def save_data(df):
+def save_data(df, table):
     conn = sqlite3.connect(DB_FILE)
-    df.to_sql("excel_matris", conn, if_exists="replace", index=False)
+    df.to_sql(table, conn, if_exists="replace", index=False)
     conn.commit()
     conn.close()
 
-def get_basliklar():
+def get_header_config():
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM matris_basliklar", conn)
+    df = pd.read_sql_query("SELECT * FROM header_config LIMIT 1", conn)
     conn.close()
-    return dict(zip(df['kod'], df['baslik_adi']))
+    return df.iloc[0].to_dict()
 
-if "df_matris" not in st.session_state:
-    st.session_state.df_matris = load_data()
+def check_duplicates(df):
+    all_plates = []
+    cols = ['mmk_hat1', 'mmk_hat2', 'eyap_silis', 'guub_cimento', 'isken_komur', 'tosyali_cevher']
+    for col in cols:
+        if col in df.columns:
+            for val in df[col].dropna():
+                p = str(val).strip().upper()
+                if p and p != 'NONE' and p != 'NAN':
+                    all_plates.append(p)
+    counts = Counter(all_plates)
+    return {p: c for p, c in counts.items() if c > 1}
 
-# 10 Adımlık Undo (Geri Al) Hafızası
+if "df_excel" not in st.session_state:
+    st.session_state.df_excel = load_data("excel_matris")
+
 if "history" not in st.session_state:
-    st.session_state.history = [st.session_state.df_matris.copy()]
+    st.session_state.history = [st.session_state.df_excel.copy()]
 
 # =========================================================
-# 4. SOL NAVİGASYON (AÇILIR / KAPANIR SIDEBAR)
+# 4. SOL NAVİGASYON
 # =========================================================
 with st.sidebar:
     st.markdown("""
-        <div style="text-align: center; margin-bottom: 15px;">
+        <div style="text-align: center; margin-bottom: 10px;">
             <h2 style="color: #38bdf8; margin:0; font-weight:900;">⚡ ŞimşekLog</h2>
-            <span style="color: #64748B; font-size: 0.75rem;">CANLI LOJİSTİK MATRİSİ</span>
+            <span style="color: #64748B; font-size: 0.75rem;">CANLI LOJİSTİK ERP</span>
         </div>
     """, unsafe_allow_html=True)
-    
     st.markdown("---")
-    kullanici_rolu = st.selectbox(
-        "👤 Kullanıcı Rolü:",
-        ["👑 Patron (Yönetici)", "💼 Muhasebe Departmanı", "🚚 Sevkiyatçı / Vardiya Amiri"],
-        index=0
-    )
+    kullanici_rolu = st.selectbox("👤 AKTİF ROL:", ["👑 Patron (Yönetici)", "💼 Muhasebe", "🚚 Sevkiyatçı / Vardiya Amiri"])
     st.markdown("---")
-    
-    menu = st.radio("SAYFALAR", ["🟢 GÜNCEL SEVKİYAT MATRİSİ", "📊 Genel İstatistikler", "⚙️ Sütun & Sistem Ayarları"])
+    menu = st.radio("NAVİGASYON", ["📋 GÜNCEL SEVKİYAT (Orijinal Excel)", "📊 İstatistikler & Özet", "🚍 Filo Kayıtları"])
 
 # =========================================================
-# 5. DİNAMİK E-TABLO MODÜLÜ
+# 5. DİNAMİK MODÜLLER
 # =========================================================
-if menu == "🟢 GÜNCEL SEVKİYAT MATRİSİ":
+if menu == "📋 GÜNCEL SEVKİYAT (Orijinal Excel)":
     
-    baslik_dict = get_basliklar()
+    cfg = get_header_config()
     bugun_str = datetime.now().strftime("%d.%m.%Y")
     
+    # 1. DİNAMİK ÜST BANNER
     st.markdown(f"""
     <div class="excel-main-title">
-        <span>⚡ CANLI SEVKİYAT E-TABLOSU ({bugun_str})</span>
-        <span style="color:#34d399; font-size:0.85rem;">● OTOMATİK VERİTABANI SENKRONİZASYONU</span>
+        <span>⚡ {cfg['main_title']}</span>
+        <span style="color:#34d399; font-size:0.85rem;">📅 {bugun_str} VARDİYA AMİRLERİ: {cfg['vardiya_amirleri']}</span>
     </div>
     """, unsafe_allow_html=True)
 
-    # DİNAMİK BAŞLIK DÜZENLEME PANELİ
-    with st.expander("✏️ Sütun Başlıklarının Adını Değiştir (Excel Kolon İsimleri)"):
-        with st.form("baslik_degistir_formu"):
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
-            b1 = c1.text_input("1. Sütun", value=baslik_dict.get("col_1", ""))
-            b2 = c2.text_input("2. Sütun", value=baslik_dict.get("col_2", ""))
-            b3 = c3.text_input("3. Sütun", value=baslik_dict.get("col_3", ""))
-            b4 = c4.text_input("4. Sütun", value=baslik_dict.get("col_4", ""))
-            b5 = c5.text_input("5. Sütun", value=baslik_dict.get("col_5", ""))
-            b6 = c6.text_input("6. Sütun", value=baslik_dict.get("col_6", ""))
-            
-            if st.form_submit_button("💾 Sütun İsimlerini Kaydet", type="primary", use_container_width=True):
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                updates = [("col_1", b1), ("col_2", b2), ("col_3", b3), ("col_4", b4), ("col_5", b5), ("col_6", b6)]
-                for k, v in updates:
-                    c.execute("UPDATE matris_basliklar SET baslik_adi = ? WHERE kod = ?", (v, k))
-                conn.commit(); conn.close()
-                st.success("✅ Sütun başlıkları başarıyla değiştirildi!")
-                st.rerun()
+    # 2. DİNAMİK LİMAN VE CİNSİ BAŞLIKLARI
+    st.markdown(f"""
+    <div class="excel-top-header">
+        <div class="head-m1">{cfg['l1']}<br><small style="color:#facc15;">{cfg['c1']}</small></div>
+        <div class="head-m2">{cfg['l2']}<br><small style="color:#facc15;">{cfg['c2']}</small></div>
+        <div class="head-m3">{cfg['l3']}<br><small style="color:#facc15;">{cfg['c3']}</small></div>
+        <div class="head-m4">{cfg['l4']}<br><small style="color:#facc15;">{cfg['c4']}</small></div>
+        <div class="head-m5">{cfg['l5']}<br><small style="color:#facc15;">{cfg['c5']}</small></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ANLIK SAYAÇ KARTLARI
-    df_m = st.session_state.df_matris
-    cols = ["col_1", "col_2", "col_3", "col_4", "col_5", "col_6"]
-    
-    st.markdown("##### 📊 Sütun Bazlı Araç Sayıları")
-    sc = st.columns(6)
-    for i, col_k in enumerate(cols):
-        count = df_m[col_k].replace('', None).dropna().count() if col_k in df_m.columns else 0
-        b_name = baslik_dict.get(col_k, col_k)
-        sc[i].markdown(f"""
-        <div class="counter-bar">
-            <span style="color:#94a3b8; font-size:0.7rem;">{b_name[:18]}</span><br>
-            <b style="color:#38bdf8; font-size:1.1rem;">{count} Araç</b>
-        </div>
-        """, unsafe_allow_html=True)
+    df_ex = st.session_state.df_excel
+
+    # 3. MÜKERRER PLAKA KONTROLÜ VE CANLI ALARM
+    dups = check_duplicates(df_ex)
+    if dups:
+        dup_str = ", ".join([f"<b>{p}</b> ({c} kez)" for p, c in dups.items()])
+        st.markdown(f'<div class="dup-alarm">🚨 MÜKERRER PLAKA ALARMI: Aşağıdaki plakalar matriste birden fazla kez girilmiş! -> {dup_str}</div>', unsafe_allow_html=True)
+
+    # 4. CANLI SAYAÇ HESAPLAMA
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c_m1 = df_ex['mmk_hat1'].replace('', None).dropna().count() + df_ex['mmk_hat2'].replace('', None).dropna().count()
+    c_m2 = df_ex['eyap_silis'].replace('', None).dropna().count()
+    c_m3 = df_ex['guub_cimento'].replace('', None).dropna().count()
+    c_m4 = df_ex['isken_komur'].replace('', None).dropna().count()
+    c_m5 = df_ex['tosyali_cevher'].replace('', None).dropna().count()
+
+    with c1: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m1} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
+    with c2: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m2} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
+    with c3: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m3} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
+    with c4: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m4} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
+    with c5: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m5} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # E-TABLO ARAÇ ÇUBUĞU
-    tb1, tb2, tb3, tb4, tb5 = st.columns([2.5, 1, 1, 1, 1])
-    with tb1:
-        arama = st.text_input("🔍 Plaka Arama:", placeholder="Örn: 31 ANM...").upper()
-    with tb2:
+    # 5. ÜST BANNER & BAŞLIKLARI DEĞİŞTİRME PANELİ
+    with st.expander("✏️ Üst Banner, Vardiya Amirleri ve Tesis Başlıklarını Düzenle"):
+        with st.form("header_formu"):
+            f_title = st.text_input("Ana Banner Başlığı:", value=cfg['main_title'])
+            f_amir = st.text_input("Vardiya Amirleri Metni:", value=cfg['vardiya_amirleri'])
+            
+            st.markdown("---")
+            fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+            fl1 = fc1.text_input("1. Liman Adı:", value=cfg['l1']); fc1_sub = fc1.text_input("1. Malzeme:", value=cfg['c1'])
+            fl2 = fc2.text_input("2. Liman Adı:", value=cfg['l2']); fc2_sub = fc2.text_input("2. Malzeme:", value=cfg['c2'])
+            fl3 = fc3.text_input("3. Liman Adı:", value=cfg['l3']); fc3_sub = fc3.text_input("3. Malzeme:", value=cfg['c3'])
+            fl4 = fc4.text_input("4. Liman Adı:", value=cfg['l4']); fc4_sub = fc4.text_input("4. Malzeme:", value=cfg['c4'])
+            fl5 = fc5.text_input("5. Liman Adı:", value=cfg['l5']); fc5_sub = fc5.text_input("5. Malzeme:", value=cfg['c5'])
+            
+            if st.form_submit_button("💾 Tüm Başlık Değişikliklerini Veritabanına Kaydet", type="primary", use_container_width=True):
+                conn = sqlite3.connect(DB_FILE)
+                c = conn.cursor()
+                c.execute('''
+                    UPDATE header_config SET main_title=?, vardiya_amirleri=?,
+                    l1=?, c1=?, l2=?, c2=?, l3=?, c3=?, l4=?, c4=?, l5=?, c5=? WHERE id=1
+                ''', (f_title, f_amir, fl1, fc1_sub, fl2, fc2_sub, fl3, fc3_sub, fl4, fc4_sub, fl5, fc5_sub))
+                conn.commit(); conn.close()
+                st.success("✅ Tüm başlıklar başarıyla güncellendi!")
+                st.rerun()
+
+    # 6. TOOLBAR VE İNTERAKTİF GRID
+    t1, t2, t3, t4, t5 = st.columns([2.5, 1, 1, 1, 1])
+    with t1:
+        arama = st.text_input("🔍 Matriste Plaka Ara:", placeholder="Örn: 31 ANM...").upper()
+    with t2:
         st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        if st.button("↩️ Geri Al (Undo)", use_container_width=True):
+        if st.button("↩️ Geri Al (Ctrl+Z)", use_container_width=True):
             if len(st.session_state.history) > 1:
                 st.session_state.history.pop()
-                st.session_state.df_matris = st.session_state.history[-1].copy()
-                st.toast("↩️ Son işlem geri alındı!")
+                st.session_state.df_excel = st.session_state.history[-1].copy()
+                st.toast("↩️ İşlem geri alındı!")
                 st.rerun()
             else:
-                st.toast("⚠️ Geri alınacak işlem geçmişi yok.")
-    with tb3:
+                st.toast("⚠️ Geri alınacak başka işlem yok.")
+    with t3:
         st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        csv = df_m.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Excel İndir", csv, "Canli_Matris.csv", "text/csv", use_container_width=True)
-    with tb4:
+        csv = df_ex.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Excel İndir", csv, "GUNCEL_SEVKIYAT_MATRISI.csv", "text/csv", use_container_width=True)
+    with t4:
         st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("➕ 5 Satır Ekle", use_container_width=True):
-            boslar = pd.DataFrame([{"sira": None, "col_1": "", "col_2": "", "col_3": "", "col_4": "", "col_5": "", "col_6": ""} for _ in range(5)])
-            st.session_state.df_matris = pd.concat([st.session_state.df_matris, boslar], ignore_index=True)
-            st.session_state.history.append(st.session_state.df_matris.copy())
+            boslar = pd.DataFrame([{"sira": None, "mmk_hat1": "", "mmk_hat2": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": ""} for _ in range(5)])
+            yeni_df = pd.concat([st.session_state.df_excel, boslar], ignore_index=True)
+            st.session_state.df_excel = yeni_df
+            st.session_state.history.append(yeni_df.copy())
             st.rerun()
-    with tb5:
+    with t5:
         st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("🧹 Boşları Temizle", use_container_width=True):
-            st.session_state.df_matris = df_m.dropna(how='all', subset=cols)
-            st.session_state.history.append(st.session_state.df_matris.copy())
-            save_data(st.session_state.df_matris)
+            cols_check = [c for c in df_ex.columns if c != 'sira']
+            yeni_df = df_ex.dropna(how='all', subset=cols_check)
+            st.session_state.df_excel = yeni_df
+            st.session_state.history.append(yeni_df.copy())
+            save_data(st.session_state.df_excel, "excel_matris")
             st.rerun()
 
-    # DİNAMİK BAŞLIK BİNDİRME
+    df_disp = df_ex.copy()
+    if arama:
+        mask = df_disp.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
+        df_disp = df_disp[mask]
+
     config = {
         "sira": st.column_config.NumberColumn("SIRA", disabled=True),
-        "col_1": st.column_config.TextColumn(baslik_dict.get("col_1", "1. SÜTUN"), width="medium"),
-        "col_2": st.column_config.TextColumn(baslik_dict.get("col_2", "2. SÜTUN"), width="medium"),
-        "col_3": st.column_config.TextColumn(baslik_dict.get("col_3", "3. SÜTUN"), width="medium"),
-        "col_4": st.column_config.TextColumn(baslik_dict.get("col_4", "4. SÜTUN"), width="medium"),
-        "col_5": st.column_config.TextColumn(baslik_dict.get("col_5", "5. SÜTUN"), width="medium"),
-        "col_6": st.column_config.TextColumn(baslik_dict.get("col_6", "6. SÜTUN"), width="medium"),
+        "mmk_hat1": st.column_config.TextColumn("HAT 1 (ÖZEL)", width="medium"),
+        "mmk_hat2": st.column_config.TextColumn("HAT 2 (GENEL)", width="medium"),
+        "eyap_silis": st.column_config.TextColumn("SAHA A (EYAP)", width="medium"),
+        "guub_cimento": st.column_config.TextColumn("SAHA B (GÜUB)", width="medium"),
+        "isken_komur": st.column_config.TextColumn("SAHA C (İSKEN)", width="medium"),
+        "tosyali_cevher": st.column_config.TextColumn("SAHA D (TOSYALI)", width="medium"),
     }
 
-    df_display = st.session_state.df_matris.copy()
-    if arama:
-        mask = df_display.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
-        df_display = df_display[mask]
+    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=450, hide_index=True)
 
-    edited = st.data_editor(
-        df_display,
-        column_config=config,
-        num_rows="dynamic",
-        use_container_width=True,
-        height=480,
-        hide_index=True
-    )
-
-    # Değişiklik Kontrolü & Geçmişe Ekleme
-    if not edited.equals(st.session_state.df_matris) and not arama:
-        st.session_state.df_matris = edited
+    if not edited.equals(st.session_state.df_excel) and not arama:
+        st.session_state.df_excel = edited
         st.session_state.history.append(edited.copy())
-        if len(st.session_state.history) > 10:
-            st.session_state.history.pop(0)
 
     if st.button("💾 Değişiklikleri Veritabanına Kaydet", type="primary", use_container_width=True):
         if not arama:
-            save_data(edited)
-            st.success("✅ Veritabanı başarıyla senkronize edildi!")
+            st.session_state.df_excel = edited
+            save_data(edited, "excel_matris")
+            st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
             st.rerun()
         else:
-            st.warning("Arama yaparken kaydetme yapılamaz. Lütfen önce arama kutusunu temizleyin.")
+            st.warning("Arama yaparken kaydetme yapılamaz. Lütfen arama kutusunu temizleyin.")
 
-elif menu == "📊 Genel İstatistikler":
-    st.subheader("📊 Toplam Matris İstatistikleri")
-    st.write(f"Toplam Aktif Kayıt Satırı: **{len(st.session_state.df_matris)}**")
+# --- DİĞER MODÜLLER ---
+elif menu == "📊 İstatistikler & Özet":
+    st.subheader("📊 Canlı Sevkiyat Veri Analizi")
+    st.write(f"Toplam Satır Sayısı: **{len(st.session_state.df_excel)}**")
 
-elif menu == "⚙️ Sütun & Sistem Ayarları":
-    st.subheader("⚙️ Veritabanı Ayarları")
-    if st.button("🚨 Matrisi Sıfırla"):
-        os.remove(DB_FILE)
-        init_db()
-        st.session_state.df_matris = load_data()
-        st.success("Sistem sıfırlandı!")
-        st.rerun()
+elif menu == "VIP Filo Kayıtları":
+    st.subheader("🚍 Şirket Filo Rehberi")
+    st.dataframe(load_data("filo"), use_container_width=True)
