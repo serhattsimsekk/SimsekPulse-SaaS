@@ -304,7 +304,7 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
         else:
             st.warning("Arama yaparken kaydetme yapılamaz. Lütfen aramayı temizleyin.")
 
-# --- MODÜL 3: WHATSAPP KANTAR FİŞİ AKIŞI (YENİ GÖRSELLERİ İŞLEME MODÜLÜ) ---
+# --- MODÜL 3: WHATSAPP KANTAR FİŞİ AKIŞI ---
 elif menu == "📱 WhatsApp Kantar Fişi Akışı":
     st.subheader("📲 WhatsApp Gruplarından Gelen Canlı Kantar Fişi Akışı")
     st.caption("WhatsApp Webhook üzerinden sahadaki şoförlerin veya kantarcıların attığı kantar fişleri ve plakalar buraya canlı düşer.")
@@ -350,9 +350,7 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
                             if st.button(f"⚡ Matrise Aktar & Onayla (#{row['id']})", type="primary", key=f"btn_{row['id']}"):
                                 conn = sqlite3.connect(DB_FILE)
                                 c = conn.cursor()
-                                # Fiş durumunu güncelle
                                 c.execute("UPDATE kantar_fisleri SET durum = '✅ İşlendi' WHERE id = ?", (row['id'],))
-                                # Sevkiyat matrisine ekle
                                 c.execute(f"INSERT INTO sevkiyat ({hedef_hat}) VALUES (?)", (row['plaka'],))
                                 conn.commit(); conn.close()
                                 
@@ -382,10 +380,10 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
             
             if st.form_submit_button("📲 WhatsApp Fişi Olarak Gönder (Webhook Push)", type="primary", use_container_width=True):
                 if sim_plaka.strip():
-                    su an = datetime.now().strftime("%d.%m.%Y %H:%M")
+                    su_an = datetime.now().strftime("%d.%m.%Y %H:%M")
                     conn = sqlite3.connect(DB_FILE)
                     conn.execute("INSERT INTO kantar_fisleri (grup_adi, gonderen, plaka, net_tonaj, tesis, tarih_saat, durum) VALUES (?,?,?,?,?,?,?)",
-                                 (sim_grup, sim_tel, sim_plaka.strip(), sim_tonaj, sim_tesis, su an, "Bekliyor"))
+                                 (sim_grup, sim_tel, sim_plaka.strip(), sim_tonaj, sim_tesis, su_an, "Bekliyor"))
                     conn.commit(); conn.close()
                     
                     st.session_state.df_fisler = load_data("kantar_fisleri")
