@@ -1,11 +1,12 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import sqlite3
 import os
 from datetime import datetime
 
 # =========================================================
-# 1. EN ÜSTTE OLMASI GEREKEN SAYFA YAPILANDIRMASI
+# 1. EN ÜSTTE SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
     page_title="Şimşek Lojistik | Enterprise Dispatch Portal",
@@ -15,11 +16,47 @@ st.set_page_config(
 )
 
 # =========================================================
-# 2. GLOBAL CSS ENJEKSİYONU (SOL MENÜ & SIFIR STREAMLİT İZİ)
+# 2. SAĞ ALTTAN ROZETLERİ SİLEN JAVASCRIPT ENJEKSİYONU
+# =========================================================
+components.html("""
+<script>
+    function removeStreamlitCloudBadges() {
+        try {
+            const parentDoc = window.parent.document;
+            const selectors = [
+                'div[class*="viewerBadge"]',
+                'div[class*="profileContainer"]',
+                'div[class*="stAppFooter"]',
+                'footer',
+                '[data-testid="stStatusWidget"]',
+                '[data-testid="stDecoration"]',
+                'a[href*="streamlit.io"]',
+                'a[href*="github.com"]'
+            ];
+            selectors.forEach(selector => {
+                const elements = parentDoc.querySelectorAll(selector);
+                elements.forEach(el => {
+                    el.style.setProperty('display', 'none', 'important');
+                    el.style.setProperty('opacity', '0', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
+                });
+            });
+        } catch (e) {
+            // Iframe erişim kontrolü
+        }
+    }
+    // Sayfa açıldığında ve dinamik yüklemelerde sürekli çalıştır
+    removeStreamlitCloudBadges();
+    setInterval(removeStreamlitCloudBadges, 300);
+</script>
+""", height=0, width=0)
+
+# =========================================================
+# 3. GLOBAL CSS STİLLERİ
 # =========================================================
 st.markdown("""
 <style>
-    /* Streamlit Üst Header, Menü ve Varsayılan Çubukları Gizleme */
+    /* Streamlit Üst Header ve Varsayılan Çubukları Gizleme */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
@@ -91,36 +128,11 @@ st.markdown("""
         padding: 10px 14px;
         text-align: center;
     }
-
-    /* SAĞ ALTTAN TÜM ROZETLERİ VE PROFİL İKONLARINI SİLME */
-    [data-testid="stDecoration"],
-    [data-testid="stStatusWidget"],
-    [data-testid="stToolbar"],
-    [data-testid="stActionButton"],
-    div[class*="viewerBadge"],
-    div[class*="profileContainer"],
-    div[class*="stAppFooter"],
-    div[class*="floating"],
-    div[data-test-script-badge],
-    a[href*="streamlit.io"],
-    a[href*="github.com"] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        width: 0 !important;
-        height: 0 !important;
-        pointer-events: none !important;
-    }
-
-    div[style*="position: fixed"][style*="bottom"],
-    div[style*="position: absolute"][style*="bottom"] {
-        display: none !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. VERİTABANI YÖNETİMİ (SQLite)
+# 4. VERİTABANI YÖNETİMİ (SQLite)
 # =========================================================
 DB_FILE = "saha_operasyon.db"
 
@@ -177,7 +189,7 @@ if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
 # =========================================================
-# 4. SOL MENÜ (ALT ALTA NAVİGASYON PANELSİ)
+# 5. SOL MENÜ
 # =========================================================
 with st.sidebar:
     st.markdown("""
@@ -200,7 +212,7 @@ with st.sidebar:
     )
 
 # =========================================================
-# 5. ORTAK ÜST HEADER
+# 6. ORTAK ÜST HEADER
 # =========================================================
 bugun_tarih = datetime.now().strftime("%d.%m.%Y")
 df_current = st.session_state.df_matris
@@ -218,7 +230,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 6. SAYFA İÇERİKLERİ
+# 7. SAYFA İÇERİKLERİ
 # =========================================================
 
 # --- 1. SÜTUN: CANLI SEVKİYAT MATRİSİ ---
@@ -326,41 +338,3 @@ elif secilen_menu == "➕ Yeni Araç / Kayıt Ekle":
                 st.rerun()
             else:
                 st.warning("Lütfen geçerli bir plaka giriniz.")
-                import streamlit as st
-
-# 1. EN ÜSTTE CONFIG
-st.set_page_config(
-    page_title="Şimşek Lojistik | Enterprise Dispatch Portal",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# 2. HATA VERMEYEN SIFIRLAMA CSS'İ
-st.markdown("""
-<style>
-    /* Üst Menü, Header ve Footer Temizliği */
-    header, footer, .stAppHeader, #MainMenu {
-        display: none !important;
-        visibility: hidden !important;
-    }
-
-    /* Kırmızı Rozet ve Profil Avatarını Yok Etme */
-    [data-testid="stDecoration"],
-    [data-testid="stStatusWidget"],
-    [data-testid="stToolbar"],
-    [data-testid="stActionButton"],
-    div[class*="viewerBadge"],
-    div[class*="profileContainer"],
-    div[class*="stAppFooter"],
-    a[href*="streamlit.io"],
-    a[href*="github.com"] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        height: 0 !important;
-        width: 0 !important;
-        pointer-events: none !important;
-    }
-</style>
-""", unsafe_allow_html=True)
