@@ -12,9 +12,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. KURUMSAL ARAYÜZ VE SIFIR ROZET CSS ENJEKSİYONU
+# 2. KURUMSAL CSS + TARAYICI SAĞ TIKINI ENGELLEYİP EXCEL MENÜSÜ AÇAN JS ENJEKSİYONU
 st.markdown("""
 <style>
+    /* Streamlit Menü ve Rozet Temizliği */
     .stAppHeader, #MainMenu, footer, header {
         display: none !important;
         visibility: hidden !important;
@@ -62,7 +63,86 @@ st.markdown("""
         padding: 8px 12px;
         text-align: center;
     }
+
+    /* ÖZEL EXCEL SAĞ TIK MENÜ STİLİ */
+    #excel-context-menu {
+        display: none;
+        position: fixed;
+        z-index: 999999;
+        width: 200px;
+        background-color: #1e293b;
+        border: 1px solid #475569;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        padding: 6px 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 13px;
+        color: #f8fafc;
+    }
+    #excel-context-menu ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    #excel-context-menu li {
+        padding: 8px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s ease;
+    }
+    #excel-context-menu li:hover {
+        background-color: #0284c7;
+        color: #ffffff;
+    }
+    .menu-divider {
+        height: 1px;
+        background-color: #334155;
+        margin: 4px 0;
+    }
 </style>
+
+<!-- ÖZEL EXCEL SAĞ TIK MENÜSÜ HTML -->
+<div id="excel-context-menu">
+    <ul>
+        <li onclick="alert('Kopyalamak için hücreyi seçip Ctrl+C tuşlarını kullanabilirsiniz.')">✂️ Kes</li>
+        <li onclick="alert('Kopyalamak için hücreyi seçip Ctrl+C tuşlarını kullanabilirsiniz.')">📋 Kopyala (Ctrl+C)</li>
+        <li onclick="alert('Yapıştırmak için hücreye tıklayıp Ctrl+V tuşlarını kullanabilirsiniz.')">📥 Yapıştır (Ctrl+V)</li>
+        <div class="menu-divider"></div>
+        <li onclick="alert('Hücreye çift tıklayarak içeriği düzenleyebilir veya silebilirsiniz.')">🧹 İçeriği Temizle</li>
+        <li onclick="alert('Aşağıdaki tablodan en alt satıra geçerek yeni araç ekleyebilirsiniz.')">➕ Yeni Satır Ekle</li>
+        <div class="menu-divider"></div>
+        <li onclick="window.location.reload()">🔄 Tabloyu Yenile</li>
+    </ul>
+</div>
+
+<!-- TARAYICI SAĞ TIKINI ENGELLEYEN JAVASCRIPT -->
+<script>
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        const menu = document.getElementById('excel-context-menu');
+        if (menu) {
+            menu.style.display = 'block';
+            
+            // Ekran sınırlarına çarpmasını önle
+            let posX = e.clientX;
+            let posY = e.clientY;
+            if (posX + 200 > window.innerWidth) posX = window.innerWidth - 210;
+            if (posY + 220 > window.innerHeight) posY = window.innerHeight - 230;
+
+            menu.style.left = posX + 'px';
+            menu.style.top = posY + 'px';
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        const menu = document.getElementById('excel-context-menu');
+        if (menu && !menu.contains(e.target)) {
+            menu.style.display = 'none';
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 # 3. VERİTABANI BAĞLANTISI VE BAŞLANGIÇ VERİSİ
@@ -122,10 +202,8 @@ init_db()
 if "df_matris" not in st.session_state:
     st.session_state.df_matris = load_data()
 
-# 4. ÜST PANEL & İSTATİSTİKLER (OTOMATİK CANLI TARİH)
+# 4. ÜST PANEL & İSTATİSTİKLER (DİNAMİK CANLI TARİH)
 df_current = st.session_state.df_matris
-
-# Güncel Tarih Formatı (GG.AA.YYYY)
 bugun_tarih = datetime.now().strftime("%d.%m.%Y")
 
 count_mmk = df_current['hat1_ozel'].replace('', None).count() + df_current['hat2_genel'].replace('', None).count()
@@ -161,9 +239,9 @@ with c5:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 5. İNTERAKTİF VE CANLI EDİTÖRLÜ EXCEL MATRİSİ
+# 5. İNTERAKTİF EXCEL MATRİSİ
 st.subheader("📋 Canlı Sevkiyat Planlama Tablosu (Düzenlenebilir)")
-st.caption("💡 İpucu: Herhangi bir hücreye çift tıklayarak plakayı değiştirebilir, doğrudan Excel'den kopyala-yapıştır yapabilirsiniz.")
+st.caption("💡 İpucu: Hücreye tıklayıp verinizi değiştirebilir veya sağ tıklayarak özel Excel menüsünü kullanabilirsiniz.")
 
 column_configuration = {
     "sira": st.column_config.NumberColumn("SIRA", disabled=True, width="small"),
