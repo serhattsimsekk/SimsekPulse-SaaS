@@ -6,14 +6,11 @@ import streamlit.components.v1 as components
 from datetime import datetime
 from collections import Counter
 
-# AgGrid - Gerçek Excel Grid Motoru
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
-
 # =========================================================
 # 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
-    page_title="ŞimşekLog | Enterprise Excel OS",
+    page_title="ŞimşekLog | Multi-Tenant Supply Chain OS",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -45,14 +42,13 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (EXCEL DARK ENTERPRISE TEMA)
+# 2. GLOBAL CSS (EXECUTIVE DARK TEMA)
 # =========================================================
 st.markdown("""
 <style>
     #MainMenu, footer { visibility: hidden !important; }
     .stAppHeader { background: transparent !important; }
     
-    /* Sol menü açma/kapatma butonunu göster */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="collapsedControl"] button {
         background-color: #0f172a !important;
@@ -139,7 +135,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS excel_matris (
             sira INTEGER PRIMARY KEY AUTOINCREMENT,
             mmk_hat1 TEXT, mmk_hat2 TEXT, eyap_silis TEXT,
-            guub_cimento TEXT, isken_komur TEXT, tosyali_cevher TEXT
+            guub_cimento TEXT, isken_komur TEXT, tosyali_cevher TEXT,
+            musteri_adi TEXT
         )
     ''')
     c.execute('''
@@ -154,13 +151,13 @@ def init_db():
     c.execute('''
         CREATE TABLE IF NOT EXISTS filo (
             plaka TEXT PRIMARY KEY, dorse TEXT, tip TEXT,
-            sofor_1 TEXT, sofor_2 TEXT, grup TEXT, durum TEXT
+            sofor_1 TEXT, sofor_2 TEXT, grup TEXT, durum TEXT, musteri TEXT
         )
     ''')
     c.execute('''
         CREATE TABLE IF NOT EXISTS finans_tarife (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tesis_adi TEXT, birim_fiyat REAL, toplam_tonaj REAL
+            tesis_adi TEXT, birim_fiyat REAL, toplam_tonaj REAL, musteri_adi TEXT
         )
     ''')
     c.execute('''
@@ -173,7 +170,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS kantar_fisleri (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             grup_adi TEXT, gonderen TEXT, plaka TEXT,
-            net_tonaj REAL, tesis TEXT, tarih_saat TEXT, durum TEXT
+            net_tonaj REAL, tesis TEXT, tarih_saat TEXT, durum TEXT, musteri_adi TEXT
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS teslimat_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            siparis_no TEXT, plaka TEXT, musteri TEXT, urun TEXT,
+            cikissaat TEXT, tahmini_varis TEXT, durum TEXT
         )
     ''')
     
@@ -195,13 +199,10 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM excel_matris")
     if c.fetchone()[0] == 0:
         ornek = [
-            ("31 ANM 573", "31 ANM 593", "31 ANK 374", "31 AAG 291", "31 ANM 598", "31 ANN 331"),
-            ("31 ANN 019", "31 ANN 168", "31 ANL 936", "31 AKL 553", "31 AIU 808", "31 AOK 866"),
-            ("31 ANM 150", "31 ANN 304", "31 ANM 576", "31 AKL 554", "31 AIU 869", "31 AKL 556"),
-            ("31 AOB 800", "31 ANN 312", "31 ANN 284", "31 AKL 852", "31 ANK 278", "31 ANM 210"),
-            ("31 AIU 820", "31 ANV 235", "31 ANR 925", "31 AKL 862", "31 ANM 584", "31 AIY 548")
+            ("31 ANM 573", "31 ANM 593", "31 ANK 374", "31 AAG 291", "31 ANM 598", "31 ANN 331", "A Şirketi"),
+            ("31 ANN 019", "31 ANN 168", "31 ANL 936", "31 AKL 553", "31 AIU 808", "31 AOK 866", "B Şirketi")
         ]
-        c.executemany("INSERT INTO excel_matris (mmk_hat1, mmk_hat2, eyap_silis, guub_cimento, isken_komur, tosyali_cevher) VALUES (?,?,?,?,?,?)", ornek)
+        c.executemany("INSERT INTO excel_matris (mmk_hat1, mmk_hat2, eyap_silis, guub_cimento, isken_komur, tosyali_cevher, musteri_adi) VALUES (?,?,?,?,?,?,?)", ornek)
     
     conn.commit()
     conn.close()
@@ -233,7 +234,7 @@ def check_duplicates(df):
         if col in df.columns:
             for val in df[col].dropna():
                 p = str(val).strip().upper()
-                if p and p != 'NONE' and p != 'NAN' and p != '':
+                if p and p != 'NONE' and p != 'NAN':
                     all_plates.append(p)
     counts = Counter(all_plates)
     return {p: c for p, c in counts.items() if c > 1}
@@ -243,6 +244,10 @@ if "df_filo" not in st.session_state: st.session_state.df_filo = load_data("filo
 if "df_finans" not in st.session_state: st.session_state.df_finans = load_data("finans_tarife")
 if "df_wa" not in st.session_state: st.session_state.df_wa = load_data("whatsapp_gruplar")
 if "df_fisler" not in st.session_state: st.session_state.df_fisler = load_data("kantar_fisleri")
+if "df_teslimat" not in st.session_state: st.session_state.df_teslimat = load_data("teslimat_log")
+
+if "history" not in st.session_state:
+    st.session_state.history = [st.session_state.df_excel.copy()]
 
 # =========================================================
 # 4. YETKİLENDİRME & SOL NAVİGASYON (RBAC)
@@ -264,16 +269,23 @@ with st.sidebar:
             "🏢 Departman Müdürü", 
             "💼 Muhasebe Departmanı", 
             "🚚 Sevkiyatçı / Vardiya Amiri", 
+            "👤 Müşteri Portalı (Firma Yetkilisi)",
             "👮‍♂️ Baş Şoför"
         ],
         index=0
     )
+    
+    secili_musteri = "Tümü"
+    if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)":
+        secili_musteri = st.selectbox("🏢 Müşteri Firması Seçin:", ["A Şirketi", "B Şirketi", "C Şirketi"])
+        st.info(f"🔒 İzole Mod: Sadece **{secili_musteri}** verileri gösteriliyor.")
     
     st.markdown("---")
     
     menuler = [
         "📊 Dashboard & Yönetici Özeti",
         "🟢 Canlı Sevkiyat Matrisi (Grid)",
+        "📦 Sevkiyat & Teslimat Takip Raporu",
         "📱 WhatsApp Kantar Fişi Akışı",
         "Master Filo & Öz Mal (HR)",
         "👥 Vardiya Amirleri & İK",
@@ -321,7 +333,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 5. DİNAMİK MODÜLLER
+# 5. DİNAMİK MODÜLLERİN TAMAMI
 # =========================================================
 
 # --- MODÜL 1: DASHBOARD ---
@@ -331,6 +343,10 @@ if menu == "📊 Dashboard & Yönetici Özeti":
     df_f = st.session_state.df_filo
     df_s = st.session_state.df_excel
     df_k = st.session_state.df_fisler
+    
+    # Müşteri Filtreleme
+    if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)" and 'musteri_adi' in df_s.columns:
+        df_s = df_s[df_s['musteri_adi'] == secili_musteri]
     
     toplam_ozmal = len(df_f)
     aktif_ozmal = len(df_f[df_f['durum'] == 'AKTİF']) if 'durum' in df_f.columns and toplam_ozmal > 0 else 0
@@ -345,21 +361,18 @@ if menu == "📊 Dashboard & Yönetici Özeti":
     with m4: st.markdown(f'<div class="metric-card"><span style="color:#94a3b8;">Matristeki Atama Sayısı</span><br><b style="color:#38bdf8; font-size:1.5rem;">{len(df_s)} Satır</b></div>', unsafe_allow_html=True)
     
     st.divider()
-    st.markdown("#### 🚨 Akıllı Saha Uyarısı")
+    st.markdown("#### 🚨 Akıllı Saha Uyarısı & Şematik Grafikler")
     if bekleyen_fisler > 0:
-        st.warning(f"⚠️ **İşlem Bekleyen Kantar Fişleri:** WhatsApp gruplarından gelen **{bekleyen_fisler}** adet kantar fişi onay bekliyor. **WhatsApp Kantar Fişi Akışı** sekmesinden onaylayabilirsiniz.")
-    elif toplam_ozmal == 0:
-        st.info("ℹ️ **Henüz Veri Girilmedi:** Şirketinize ait araçları eklemek için **Master Filo & Öz Mal (HR)** sekmesini kullanabilirsiniz.")
+        st.warning(f"⚠️ **İşlem Bekleyen Kantar Fişleri:** WhatsApp gruplarından gelen **{bekleyen_fisler}** adet kantar fişi onay bekliyor.")
     else:
         st.success("✅ **Saha Mükemmel:** İşlenmeyen kantar fişi yok ve tüm sistem güncel.")
 
-# --- MODÜL 2: CANLI SEVKİYAT MATRİSİ (AGGRID REAL EXCEL ENGINE) ---
+# --- MODÜL 2: CANLI SEVKİYAT MATRİSİ ---
 elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
     
     cfg = get_header_config()
     bugun_str = datetime.now().strftime("%d.%m.%Y")
     
-    # 1. DİNAMİK ÜST BANNER
     st.markdown(f"""
     <div class="excel-main-title">
         <span>⚡ {cfg['main_title']}</span>
@@ -367,7 +380,6 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. DİNAMİK LİMAN VE CİNSİ BAŞLIKLARI
     st.markdown(f"""
     <div class="excel-top-header">
         <div class="head-m1">{cfg['l1']}<br><small style="color:#facc15;">{cfg['c1']}</small></div>
@@ -380,19 +392,21 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
 
     df_ex = st.session_state.df_excel
 
-    # 3. MÜKERRER PLAKA KONTROLÜ VE CANLI ALARM
+    # Müşteri Yetkili İzolasyonu
+    if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)" and 'musteri_adi' in df_ex.columns:
+        df_ex = df_ex[df_ex['musteri_adi'] == secili_musteri]
+
     dups = check_duplicates(df_ex)
     if dups:
         dup_str = ", ".join([f"<b>{p}</b> ({c} kez)" for p, c in dups.items()])
         st.markdown(f'<div class="dup-alarm">🚨 MÜKERRER PLAKA ALARMI: Aşağıdaki plakalar matriste birden fazla kez girilmiş! -> {dup_str}</div>', unsafe_allow_html=True)
 
-    # 4. CANLI SAYAÇ HESAPLAMA
     c1, c2, c3, c4, c5 = st.columns(5)
-    c_m1 = df_ex['mmk_hat1'].replace('', None).dropna().count() + df_ex['mmk_hat2'].replace('', None).dropna().count()
-    c_m2 = df_ex['eyap_silis'].replace('', None).dropna().count()
-    c_m3 = df_ex['guub_cimento'].replace('', None).dropna().count()
-    c_m4 = df_ex['isken_komur'].replace('', None).dropna().count()
-    c_m5 = df_ex['tosyali_cevher'].replace('', None).dropna().count()
+    c_m1 = df_ex['mmk_hat1'].replace('', None).dropna().count() + df_ex['mmk_hat2'].replace('', None).dropna().count() if 'mmk_hat1' in df_ex.columns else 0
+    c_m2 = df_ex['eyap_silis'].replace('', None).dropna().count() if 'eyap_silis' in df_ex.columns else 0
+    c_m3 = df_ex['guub_cimento'].replace('', None).dropna().count() if 'guub_cimento' in df_ex.columns else 0
+    c_m4 = df_ex['isken_komur'].replace('', None).dropna().count() if 'isken_komur' in df_ex.columns else 0
+    c_m5 = df_ex['tosyali_cevher'].replace('', None).dropna().count() if 'tosyali_cevher' in df_ex.columns else 0
 
     with c1: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m1} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
     with c2: st.markdown(f'<div class="counter-bar">Öz Mal: <b style="color:#34d399;">{c_m2} Araç</b><br>Destek: <b style="color:#f97316;">0 Araç</b></div>', unsafe_allow_html=True)
@@ -402,103 +416,106 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 5. ÜST BANNER & BAŞLIKLARI DEĞİŞTİRME PANELİ
-    with st.expander("✏️ Üst Banner, Vardiya Amirleri ve Tesis Başlıklarını Düzenle"):
-        with st.form("header_formu"):
-            f_title = st.text_input("Ana Banner Başlığı:", value=cfg['main_title'])
-            f_amir = st.text_input("Vardiya Amirleri Metni:", value=cfg['vardiya_amirleri'])
-            
-            st.markdown("---")
-            fc1, fc2, fc3, fc4, fc5 = st.columns(5)
-            fl1 = fc1.text_input("1. Liman Adı:", value=cfg['l1']); fc1_sub = fc1.text_input("1. Malzeme:", value=cfg['c1'])
-            fl2 = fc2.text_input("2. Liman Adı:", value=cfg['l2']); fc2_sub = fc2.text_input("2. Malzeme:", value=cfg['c2'])
-            fl3 = fc3.text_input("3. Liman Adı:", value=cfg['l3']); fc3_sub = fc3.text_input("3. Malzeme:", value=cfg['c3'])
-            fl4 = fc4.text_input("4. Liman Adı:", value=cfg['l4']); fc4_sub = fc4.text_input("4. Malzeme:", value=cfg['c4'])
-            fl5 = fc5.text_input("5. Liman Adı:", value=cfg['l5']); fc5_sub = fc5.text_input("5. Malzeme:", value=cfg['c5'])
-            
-            if st.form_submit_button("💾 Tüm Başlık Değişikliklerini Veritabanına Kaydet", type="primary", use_container_width=True):
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                c.execute('''
-                    UPDATE header_config SET main_title=?, vardiya_amirleri=?,
-                    l1=?, c1=?, l2=?, c2=?, l3=?, c3=?, l4=?, c4=?, l5=?, c5=? WHERE id=1
-                ''', (f_title, f_amir, fl1, fc1_sub, fl2, fc2_sub, fl3, fc3_sub, fl4, fc4_sub, fl5, fc5_sub))
-                conn.commit(); conn.close()
-                st.success("✅ Tüm başlıklar başarıyla güncellendi!")
-                st.rerun()
-
-    # 6. EXCEL GRID TOOLBAR
-    t1, t2, t3, t4 = st.columns([3, 1, 1, 1])
+    t1, t2, t3, t4, t5 = st.columns([2.5, 1, 1, 1, 1])
     with t1:
-        st.caption("💡 **Masaüstü Excel Esnekliği:** Hücreye çift tıklayıp veri yazabilir, `Ctrl+C` ve `Ctrl+V` ile toplu yapıştırabilirsiniz.")
+        arama = st.text_input("🔍 Matriste Plaka Ara:", placeholder="Örn: 31 ANM...").upper()
     with t2:
-        csv = df_ex.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Excel İndir", csv, "GUNCEL_SEVKIYAT_MATRISI.csv", "text/csv", use_container_width=True)
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("↩️ Geri Al (Ctrl+Z)", use_container_width=True):
+            if len(st.session_state.history) > 1:
+                st.session_state.history.pop()
+                st.session_state.df_excel = st.session_state.history[-1].copy()
+                st.toast("↩️ İşlem geri alındı!")
+                st.rerun()
+            else:
+                st.toast("⚠️ Geri alınacak başka işlem yok.")
     with t3:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        csv = df_ex.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Excel / Sheets İndir", csv, "GUNCEL_SEVKIYAT_MATRISI.csv", "text/csv", use_container_width=True)
+    with t4:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("➕ 5 Satır Ekle", use_container_width=True):
-            boslar = pd.DataFrame([{"sira": None, "mmk_hat1": "", "mmk_hat2": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": ""} for _ in range(5)])
+            boslar = pd.DataFrame([{"sira": None, "mmk_hat1": "", "mmk_hat2": "", "eyap_silis": "", "guub_cimento": "", "isken_komur": "", "tosyali_cevher": "", "musteri_adi": ""} for _ in range(5)])
             yeni_df = pd.concat([st.session_state.df_excel, boslar], ignore_index=True)
             st.session_state.df_excel = yeni_df
+            st.session_state.history.append(yeni_df.copy())
             st.rerun()
-    with t4:
+    with t5:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("🧹 Boşları Temizle", use_container_width=True):
             cols_check = [c for c in df_ex.columns if c != 'sira']
             yeni_df = df_ex.dropna(how='all', subset=cols_check)
             st.session_state.df_excel = yeni_df
+            st.session_state.history.append(yeni_df.copy())
             save_data(st.session_state.df_excel, "excel_matris")
             st.rerun()
 
-    # 7. AGGRID GERÇEK EXCEL MOTORU YAPILANDIRMASI
-    gb = GridOptionsBuilder.from_dataframe(df_ex)
-    gb.configure_default_column(editable=True, groupable=True, value=True, enableRowGroup=True, resizable=True, filter=True)
-    gb.configure_column("sira", header_name="SIRA", width=80, editable=False)
-    gb.configure_column("mmk_hat1", header_name="HAT 1 (ÖZEL)", width=150)
-    gb.configure_column("mmk_hat2", header_name="HAT 2 (GENEL)", width=150)
-    gb.configure_column("eyap_silis", header_name="SAHA A (EYAP)", width=150)
-    gb.configure_column("guub_cimento", header_name="SAHA B (GÜUB)", width=150)
-    gb.configure_column("isken_komur", header_name="SAHA C (İSKEN)", width=150)
-    gb.configure_column("tosyali_cevher", header_name="SAHA D (TOSYALI)", width=150)
-    
-    # Kopyala-Yapıştır ve Excel Klavye Kısayollarını Aktif Et
-    gb.configure_grid_options(
-        enableRangeSelection=True,
-        copyHeadersToClipboard=False,
-        undoRedoCellEditing=True,
-        undoRedoCellEditingLimit=20
-    )
-    
-    grid_options = gb.build()
+    df_disp = df_ex.copy()
+    if arama:
+        mask = df_disp.apply(lambda r: r.astype(str).str.contains(arama, case=False).any(), axis=1)
+        df_disp = df_disp[mask]
 
-    grid_response = AgGrid(
-        df_ex,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.MODEL_CHANGED,
-        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-        fit_columns_on_grid_load=False,
-        theme="balham-dark", # Profesyonel Koyu Excel Teması
-        height=450,
-        reload_data=False
-    )
+    config = {
+        "sira": st.column_config.NumberColumn("SIRA", disabled=True),
+        "mmk_hat1": st.column_config.TextColumn("HAT 1 (ÖZEL)", width="medium"),
+        "mmk_hat2": st.column_config.TextColumn("HAT 2 (GENEL)", width="medium"),
+        "eyap_silis": st.column_config.TextColumn("SAHA A (EYAP)", width="medium"),
+        "guub_cimento": st.column_config.TextColumn("SAHA B (GÜUB)", width="medium"),
+        "isken_komur": st.column_config.TextColumn("SAHA C (İSKEN)", width="medium"),
+        "tosyali_cevher": st.column_config.TextColumn("SAHA D (TOSYALI)", width="medium"),
+        "musteri_adi": st.column_config.TextColumn("MÜŞTERİ FİRMA", width="medium"),
+    }
 
-    updated_df = pd.DataFrame(grid_response['data'])
+    edited = st.data_editor(df_disp, column_config=config, num_rows="dynamic", use_container_width=True, height=450, hide_index=True)
 
     if st.button("💾 Değişiklikleri Veritabanına Kaydet", type="primary", use_container_width=True):
-        st.session_state.df_excel = updated_df
-        save_data(updated_df, "excel_matris")
-        st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
-        st.rerun()
+        if not arama:
+            st.session_state.df_excel = edited
+            save_data(edited, "excel_matris")
+            st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
+            st.rerun()
 
-    # 8. ALT SEKMELER (ORİJİNAL EXCEL ALT SEKME BARI)
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.caption("📂 EXCEL SAYFA SEKMELERİ:")
-    b1, b2, b3, b4, b5 = st.columns(5)
-    b1.button("📊 AYLIK ÖZET", use_container_width=True)
-    b2.button("👥 ARAÇ GRUP DÜZENİ", use_container_width=True)
-    b3.button("VIP ARAÇ VERİTABANI", use_container_width=True)
-    b4.button(f"📅 {bugun_str}", use_container_width=True)
-    b5.button("🟢 GÜNCEL SEVKİYAT", type="primary", use_container_width=True)
+# --- MODÜL 3: SEVKİYAT & TESLİMAT TAKİP RAPORU ---
+elif menu == "📦 Sevkiyat & Teslimat Takip Raporu":
+    st.subheader("📦 Detaylı Sevkiyat Takip, Kayıp & Geciken Sipariş Paneli")
+    st.caption("✔️ Otomatik teslimat hesaplamaları, müşteri/ürün ayrımı ve geciken araç takibi.")
+    
+    df_t = st.session_state.df_teslimat
+    if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)" and len(df_t) > 0 and 'musteri' in df_t.columns:
+        df_t = df_t[df_t['musteri'] == secili_musteri]
 
-# --- MODÜL 3: WHATSAPP KANTAR FİŞİ AKIŞI ---
+    col_t1, col_t2 = st.columns([3, 1])
+    with col_t1:
+        st.markdown("#### 🚨 Kaybolan ve Geciken Sipariş Takibi")
+        if len(df_t) > 0 and 'durum' in df_t.columns:
+            gecikenler = df_t[df_t['durum'] == 'GECİKTİ']
+            if len(gecikenler) > 0:
+                st.error(f"⚠️ **Toplam Geciken / Riskli Sefer Sayısı: {len(gecikenler)}**")
+                st.dataframe(gecikenler, use_container_width=True, hide_index=True)
+            else:
+                st.success("✅ Zamanında teslimat oranı %100. Geciken sefer yok.")
+        else:
+            st.info("Henüz kayıtlı teslimat log verisi yok.")
+
+    with col_t2:
+        st.markdown("#### ➕ Yeni Teslimat Logu")
+        with st.form("teslimat_formu"):
+            sp_no = st.text_input("Sipariş No:", value="SP-1002")
+            sp_plaka = st.text_input("Plaka:", value="31 ANM 576").upper()
+            sp_must = st.selectbox("Müşteri:", ["A Şirketi", "B Şirketi", "C Şirketi"])
+            sp_urun = st.text_input("Ürün Cinsi:", value="Kömür")
+            sp_durum = st.selectbox("Teslimat Durumu:", ["YOLDA", "TESLİM EDİLDİ", "GECİKTİ"])
+            if st.form_submit_button("➕ Log Kaydet", type="primary"):
+                conn = sqlite3.connect(DB_FILE)
+                conn.execute("INSERT INTO teslimat_log (siparis_no, plaka, musteri, urun, cikissaat, durum) VALUES (?,?,?,?,?,?)",
+                             (sp_no, sp_plaka, sp_must, sp_urun, datetime.now().strftime("%H:%M"), sp_durum))
+                conn.commit(); conn.close()
+                st.session_state.df_teslimat = load_data("teslimat_log")
+                st.success("Log eklendi!")
+                st.rerun()
+
+# --- MODÜL 4: WHATSAPP KANTAR FİŞİ AKIŞI ---
 elif menu == "📱 WhatsApp Kantar Fişi Akışı":
     st.subheader("📲 WhatsApp Gruplarından Gelen Canlı Kantar Fişi Akışı")
     
@@ -507,7 +524,7 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
     with tab_akil:
         df_k = st.session_state.df_fisler
         if len(df_k) == 0:
-            st.info("ℹ️ Henüz WhatsApp gruplarından gelen kantar fişi yok. Yan sekmedeki simülatörden test fişi gönderebilirsiniz.")
+            st.info("ℹ️ Henüz WhatsApp gruplarından gelen kantar fişi yok.")
         else:
             bekleyenler = df_k[df_k['durum'] == 'Bekliyor']
             islenenler = df_k[df_k['durum'] == '✅ İşlendi']
@@ -542,11 +559,6 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
                                 st.success(f"✅ **{row['plaka']}** matrise eklendi!")
                                 st.rerun()
 
-            if len(islenenler) > 0:
-                st.divider()
-                st.markdown(f"#### ✅ Geçmişte İşlenen Fişler ({len(islenenler)})")
-                st.dataframe(islenenler, use_container_width=True, hide_index=True)
-
     with tab_simulasyon:
         with st.form("simulasyon_formu"):
             s1, s2, s3 = st.columns(3)
@@ -565,7 +577,7 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
                     st.success("📲 Fiş WhatsApp havuzuna düştü!")
                     st.rerun()
 
-# --- MODÜL 4: MASTER FİLO & ÖZ MAL ---
+# --- MODÜL 5: MASTER FİLO & ÖZ MAL ---
 elif menu == "Master Filo & Öz Mal (HR)":
     st.subheader("🚍 Şirket Öz Mal Filo Veritabanı & Dorse Tipleri")
     
@@ -573,7 +585,7 @@ elif menu == "Master Filo & Öz Mal (HR)":
     if len(df_f) > 0:
         st.dataframe(df_f, use_container_width=True, hide_index=True, height=350)
     else:
-        st.info("ℹ️ Şirketinizin veritabanında henüz kayıtlı araç bulunmamaktadır. Aşağıdaki formdan ilk aracınızı ekleyebilirsiniz.")
+        st.info("ℹ️ Şirketinizin veritabanında henüz kayıtlı araç bulunmamaktadır.")
     
     st.markdown("#### ➕ Veritabanına Yeni Öz Mal Araç Ekle")
     with st.form("yeni_arac_formu"):
@@ -598,7 +610,7 @@ elif menu == "Master Filo & Öz Mal (HR)":
                 st.success(f"✅ **{np}** plakalı araç veritabanına eklendi!")
                 st.rerun()
 
-# --- MODÜL 5: VARDİYA AMİRLERİ & İK ---
+# --- MODÜL 6: VARDİYA AMİRLERİ & İK ---
 elif menu == "👥 Vardiya Amirleri & İK":
     st.subheader("👥 Saha Amir Grupları & Vardiya Yönetimi")
     df_f = st.session_state.df_filo
@@ -612,9 +624,9 @@ elif menu == "👥 Vardiya Amirleri & İK":
                  st.info(f"Gruptaki Araç Sayısı: **{count}**")
                  st.dataframe(df_f[df_f['grup'] == g][['plaka', 'sofor_1', 'durum']], hide_index=True)
     else:
-        st.info("ℹ️ Henüz gruplandırılmış araç bulunmamaktadır. **Master Filo** sekmesinden araç eklerken grup adı tanımlayabilirsiniz.")
+        st.info("ℹ️ Henüz gruplandırılmış araç bulunmamaktadır.")
 
-# --- MODÜL 6: KADEME & MUAYENE ---
+# --- MODÜL 7: KADEME & MUAYENE ---
 elif menu == "🚨 Kademe, Muayene & Lastik":
     st.subheader("🛠️ Kademe Arıza ve Bakım Takip Paneli")
     df_f = st.session_state.df_filo
@@ -628,7 +640,7 @@ elif menu == "🚨 Kademe, Muayene & Lastik":
     else:
         st.info("ℹ️ Kayıtlı araç bulunamadı.")
 
-# --- MODÜL 7: FİNANS & FATURALAMA ---
+# --- MODÜL 8: FİNANS & FATURALAMA ---
 elif menu == "💼 Finans, Faturalama & Ciro":
     if not finans_yetkisi:
         st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron**, **Departman Müdürü** veya **Muhasebe** yetkisi olan kullanıcılar erişebilir.")
@@ -660,7 +672,7 @@ elif menu == "💼 Finans, Faturalama & Ciro":
             toplam_ciro = df_fin['Tahmini_Ciro_TL'].sum()
             st.success(f"💰 **Toplam Tahmini Kesilecek Fatura Tutarı: ₺ {toplam_ciro:,.2f}**")
 
-# --- MODÜL 8: WHATSAPP GRUP AYARLARI ---
+# --- MODÜL 9: WHATSAPP GRUP AYARLARI ---
 elif menu == "⚙️ WhatsApp Grup Ayarları":
     if not patron_yetkisi:
         st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron (Yönetici)** erişebilir.")
@@ -688,7 +700,7 @@ elif menu == "⚙️ WhatsApp Grup Ayarları":
         if len(df_w) > 0:
             st.dataframe(df_w[['id', 'grup_adi', 'grup_id', 'bildirim_tipi', 'aktif']], use_container_width=True, hide_index=True)
 
-# --- MODÜL 9: B2B E-TİCARET ---
+# --- MODÜL 10: B2B E-TİCARET ---
 elif menu == "🌐 B2B E-Ticaret & Kurye Ağı":
     st.subheader("🌐 Son Kilometre (Last-Mile) E-Ticaret Kurye Yönetimi")
     st.info("ℹ️ E-ticaret ve kargo dağıtımı yapan hafif ticari araç yönetimi alanı.")
