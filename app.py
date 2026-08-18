@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+import urllib.parse
 import streamlit.components.v1 as components
 from datetime import datetime
 from collections import Counter
@@ -10,7 +11,7 @@ from collections import Counter
 # 1. SAYFA YAPILANDIRMASI
 # =========================================================
 st.set_page_config(
-    page_title="ŞimşekLog | Multi-Tenant Supply Chain OS",
+    page_title="ŞimşekLog | Enterprise Supply Chain OS",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -42,7 +43,7 @@ components.html("""
 """, height=0, width=0)
 
 # =========================================================
-# 2. GLOBAL CSS (EXECUTIVE DARK TEMA)
+# 2. GLOBAL CSS (SABİT / AÇILIR SIDEBAR VE EXECUTIVE DARK TEMA)
 # =========================================================
 st.markdown("""
 <style>
@@ -124,7 +125,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 3. VERİTABANI MİMARİSİ
+# 3. VERİTABANI & GOOGLE SHEETS BULUT MİMARİSİ
 # =========================================================
 DB_FILE = "simsek_os.db"
 
@@ -145,7 +146,7 @@ def init_db():
             main_title TEXT, vardiya_amirleri TEXT,
             l1 TEXT, c1 TEXT, l2 TEXT, c2 TEXT,
             l3 TEXT, c3 TEXT, l4 TEXT, c4 TEXT,
-            l5 TEXT, c5 TEXT
+            l5 TEXT, c5 TEXT, google_sheet_url TEXT
         )
     ''')
     c.execute('''
@@ -184,8 +185,8 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM header_config")
     if c.fetchone()[0] == 0:
         c.execute('''
-            INSERT INTO header_config (main_title, vardiya_amirleri, l1, c1, l2, c2, l3, c3, l4, c4, l5, c5)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO header_config (main_title, vardiya_amirleri, l1, c1, l2, c2, l3, c3, l4, c4, l5, c5, google_sheet_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             "ŞİMŞEK LOJİSTİK - İSKENDERUN / DİLOVASI SAHA MATRİSİ",
             "SİNAN GÜL // MUSTAFA ÇETİN",
@@ -193,7 +194,8 @@ def init_db():
             "EYAP LİMANI", "SİLİS KUMU",
             "GÜÜB LİMANI", "ÇİMENTO",
             "İSKEN SANTRAL", "KÖMÜR",
-            "TOSYALI LİMANI", "CEVHER"
+            "TOSYALI LİMANI", "CEVHER",
+            ""
         ))
 
     c.execute("SELECT COUNT(*) FROM excel_matris")
@@ -226,6 +228,17 @@ def get_header_config():
     df = pd.read_sql_query("SELECT * FROM header_config LIMIT 1", conn)
     conn.close()
     return df.iloc[0].to_dict()
+
+# GOOGLE SHEETS DİREKT BULUT OKUMA MOTORU ($0 MALİYET)
+def fetch_google_sheet(sheet_url):
+    try:
+        if "/edit" in sheet_url:
+            csv_url = sheet_url.split("/edit")[0] + "/export?format=csv"
+        else:
+            csv_url = sheet_url
+        return pd.read_csv(csv_url)
+    except Exception as e:
+        return None
 
 def check_duplicates(df):
     all_plates = []
@@ -285,6 +298,7 @@ with st.sidebar:
     menuler = [
         "📊 Dashboard & Yönetici Özeti",
         "🟢 Canlı Sevkiyat Matrisi (Grid)",
+        "🌐 Google Sheets Bulut Senkronu",
         "📦 Sevkiyat & Teslimat Takip Raporu",
         "📱 WhatsApp Kantar Fişi Akışı",
         "Master Filo & Öz Mal (HR)",
@@ -344,7 +358,6 @@ if menu == "📊 Dashboard & Yönetici Özeti":
     df_s = st.session_state.df_excel
     df_k = st.session_state.df_fisler
     
-    # Müşteri Filtreleme
     if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)" and 'musteri_adi' in df_s.columns:
         df_s = df_s[df_s['musteri_adi'] == secili_musteri]
     
@@ -392,7 +405,6 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
 
     df_ex = st.session_state.df_excel
 
-    # Müşteri Yetkili İzolasyonu
     if kullanici_rolu == "👤 Müşteri Portalı (Firma Yetkilisi)" and 'musteri_adi' in df_ex.columns:
         df_ex = df_ex[df_ex['musteri_adi'] == secili_musteri]
 
@@ -476,7 +488,39 @@ elif menu == "🟢 Canlı Sevkiyat Matrisi (Grid)":
             st.success("✅ Veriler veritabanına başarıyla kaydedildi!")
             st.rerun()
 
-# --- MODÜL 3: SEVKİYAT & TESLİMAT TAKİP RAPORU ---
+# --- MODÜL 3: GOOGLE SHEETS BULUT SENKRONİZASYONU ($0 MALİYET) ---
+elif menu == "🌐 Google Sheets Bulut Senkronu":
+    st.subheader("🌐 SIFIR MALİYETLİ BULUT CANLI SEYİR (Google Sheets Entegrasyonu)")
+    st.caption("Google E-Tablolar üzerindeki dosyanızı buraya bağlayarak sahadaki amirlerin telefondan girdiği verileri anında çekebilirsiniz.")
+    
+    cfg = get_header_config()
+    current_sheet_url = cfg.get("google_sheet_url", "")
+    
+    with st.form("gsheet_form"):
+        gs_url = st.text_input("🔗 Google Sheets Paylaşım Linki (Herkese Açık / Düzenlenebilir):", value=current_sheet_url, placeholder="https://docs.google.com/spreadsheets/d/XXXXXX/edit")
+        if st.form_submit_button("🔗 Google Sheets'i Sistemle Bağla & Senkronize Et", type="primary", use_container_width=True):
+            if gs_url.strip():
+                conn = sqlite3.connect(DB_FILE)
+                conn.execute("UPDATE header_config SET google_sheet_url = ? WHERE id = 1", (gs_url.strip(),))
+                conn.commit(); conn.close()
+                st.success("✅ Google Sheets bağlantısı kaydedildi!")
+                st.rerun()
+
+    if current_sheet_url:
+        st.divider()
+        st.markdown("#### 🔄 Google Buluttan Çekilen Canlı Veri Tablosu")
+        df_cloud = fetch_google_sheet(current_sheet_url)
+        if df_cloud is not None:
+            st.dataframe(df_cloud, use_container_width=True)
+            if st.button("⬇️ Buluttaki Veriyi Yerel Matrise Aktar & Senkronize Et", type="primary"):
+                st.session_state.df_excel = df_cloud
+                save_data(df_cloud, "excel_matris")
+                st.success("✅ Google Sheets verisi yerel matrise aktarıldı!")
+                st.rerun()
+        else:
+            st.error("⚠️ Google Sheets dosyasından veri okunamadı. Lütfen paylaşım ayarlarının 'Bağlantıya sahip herkes görebilir' olduğundan emin olun.")
+
+# --- MODÜL 4: SEVKİYAT & TESLİMAT TAKİP RAPORU ---
 elif menu == "📦 Sevkiyat & Teslimat Takip Raporu":
     st.subheader("📦 Detaylı Sevkiyat Takip, Kayıp & Geciken Sipariş Paneli")
     st.caption("✔️ Otomatik teslimat hesaplamaları, müşteri/ürün ayrımı ve geciken araç takibi.")
@@ -515,7 +559,7 @@ elif menu == "📦 Sevkiyat & Teslimat Takip Raporu":
                 st.success("Log eklendi!")
                 st.rerun()
 
-# --- MODÜL 4: WHATSAPP KANTAR FİŞİ AKIŞI ---
+# --- MODÜL 5: WHATSAPP KANTAR FİŞİ AKIŞI ---
 elif menu == "📱 WhatsApp Kantar Fişi Akışı":
     st.subheader("📲 WhatsApp Gruplarından Gelen Canlı Kantar Fişi Akışı")
     
@@ -577,7 +621,7 @@ elif menu == "📱 WhatsApp Kantar Fişi Akışı":
                     st.success("📲 Fiş WhatsApp havuzuna düştü!")
                     st.rerun()
 
-# --- MODÜL 5: MASTER FİLO & ÖZ MAL ---
+# --- MODÜL 6: MASTER FİLO & ÖZ MAL ---
 elif menu == "Master Filo & Öz Mal (HR)":
     st.subheader("🚍 Şirket Öz Mal Filo Veritabanı & Dorse Tipleri")
     
@@ -610,7 +654,7 @@ elif menu == "Master Filo & Öz Mal (HR)":
                 st.success(f"✅ **{np}** plakalı araç veritabanına eklendi!")
                 st.rerun()
 
-# --- MODÜL 6: VARDİYA AMİRLERİ & İK ---
+# --- MODÜL 7: VARDİYA AMİRLERİ & İK ---
 elif menu == "👥 Vardiya Amirleri & İK":
     st.subheader("👥 Saha Amir Grupları & Vardiya Yönetimi")
     df_f = st.session_state.df_filo
@@ -626,7 +670,7 @@ elif menu == "👥 Vardiya Amirleri & İK":
     else:
         st.info("ℹ️ Henüz gruplandırılmış araç bulunmamaktadır.")
 
-# --- MODÜL 7: KADEME & MUAYENE ---
+# --- MODÜL 8: KADEME & MUAYENE ---
 elif menu == "🚨 Kademe, Muayene & Lastik":
     st.subheader("🛠️ Kademe Arıza ve Bakım Takip Paneli")
     df_f = st.session_state.df_filo
@@ -640,7 +684,7 @@ elif menu == "🚨 Kademe, Muayene & Lastik":
     else:
         st.info("ℹ️ Kayıtlı araç bulunamadı.")
 
-# --- MODÜL 8: FİNANS & FATURALAMA ---
+# --- MODÜL 9: FİNANS & FATURALAMA ---
 elif menu == "💼 Finans, Faturalama & Ciro":
     if not finans_yetkisi:
         st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron**, **Departman Müdürü** veya **Muhasebe** yetkisi olan kullanıcılar erişebilir.")
@@ -672,7 +716,7 @@ elif menu == "💼 Finans, Faturalama & Ciro":
             toplam_ciro = df_fin['Tahmini_Ciro_TL'].sum()
             st.success(f"💰 **Toplam Tahmini Kesilecek Fatura Tutarı: ₺ {toplam_ciro:,.2f}**")
 
-# --- MODÜL 9: WHATSAPP GRUP AYARLARI ---
+# --- MODÜL 10: WHATSAPP GRUP AYARLARI ---
 elif menu == "⚙️ WhatsApp Grup Ayarları":
     if not patron_yetkisi:
         st.error("⛔ **ERİŞİM ENGELLEDİ:** Bu ekrana sadece **Patron (Yönetici)** erişebilir.")
@@ -700,7 +744,7 @@ elif menu == "⚙️ WhatsApp Grup Ayarları":
         if len(df_w) > 0:
             st.dataframe(df_w[['id', 'grup_adi', 'grup_id', 'bildirim_tipi', 'aktif']], use_container_width=True, hide_index=True)
 
-# --- MODÜL 10: B2B E-TİCARET ---
+# --- MODÜL 11: B2B E-TİCARET ---
 elif menu == "🌐 B2B E-Ticaret & Kurye Ağı":
     st.subheader("🌐 Son Kilometre (Last-Mile) E-Ticaret Kurye Yönetimi")
     st.info("ℹ️ E-ticaret ve kargo dağıtımı yapan hafif ticari araç yönetimi alanı.")
