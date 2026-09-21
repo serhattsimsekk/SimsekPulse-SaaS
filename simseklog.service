@@ -1,0 +1,19 @@
+[Unit]
+Description=SimsekLog FastAPI production service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/simseklog
+Environment="PATH=/var/www/simseklog/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+EnvironmentFile=-/etc/simseklog.env
+Environment="PORT=8000"
+ExecStart=/var/www/simseklog/venv/bin/uvicorn app:app --host 127.0.0.1 --port ${PORT}
+Restart=always
+RestartSec=3
+KillMode=process
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

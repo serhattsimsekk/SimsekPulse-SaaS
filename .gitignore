@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.production.example
+__pycache__/
+*.py[cod]
+*.db
+.next/
+node_modules/
+frontend/.next/
+frontend/node_modules/
+*.log

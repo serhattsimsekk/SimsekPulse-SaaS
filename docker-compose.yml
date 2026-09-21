@@ -1,0 +1,65 @@
+services:
+  api:
+    build: .
+    container_name: simseklog-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    environment:
+      PORT: ${PORT:-8000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://simseklog:simseklog@db:5432/simseklog}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      JWT_SECRET: ${SECRET_KEY:?SECRET_KEY must be set}
+      REDIS_URL: redis://redis:6379/0
+      BACKUP_DIR: /var/backups/simseklog
+      ENABLE_SCHEDULED_JOBS: ${ENABLE_SCHEDULED_JOBS:-true}
+    volumes:
+      - simseklog_backups:/var/backups/simseklog
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    container_name: simseklog-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - api
+  db:
+    image: postgres:16-alpine
+    container_name: simseklog-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-simseklog}
+      POSTGRES_USER: ${POSTGRES_USER:-simseklog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - simseklog_pgdata:/var/lib/postgresql/data
+      - ./database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    container_name: simseklog-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - simseklog_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  simseklog_pgdata:
+  simseklog_backups:
+  simseklog_redisdata:

@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { background: #f6f8fb; color: #132238; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, "Plus Jakarta Sans", Arial, Helvetica, sans-serif; }
+.text-electric { color: #38bdf8; }
+.glass { background: rgba(255,255,255,.78); backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.55); }
+button, input, select, textarea { font: inherit; }
+.grid-lines { background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px); background-size: 24px 24px; }
