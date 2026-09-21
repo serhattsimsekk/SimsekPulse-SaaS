@@ -26,7 +26,8 @@ fi
 
 $COMPOSE up -d --build db redis
 $COMPOSE exec -T db pg_isready -U simseklog -d simseklog
-$COMPOSE run --rm api sh -c 'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/001_initial_schema.sql && psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/migrations/002_arvento_credentials.sql'
+$COMPOSE exec -T db psql -v ON_ERROR_STOP=1 -U simseklog -d simseklog < database/migrations/001_initial_schema.sql
+$COMPOSE exec -T db psql -v ON_ERROR_STOP=1 -U simseklog -d simseklog < database/migrations/002_arvento_credentials.sql
 $COMPOSE run --rm api python seed.py
 $COMPOSE up -d --build api frontend
 

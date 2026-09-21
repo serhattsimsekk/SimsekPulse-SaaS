@@ -42,7 +42,8 @@ chmod +x deploy.sh
 DOMAIN=www.example.com CERTBOT_EMAIL=ops@example.com ./deploy.sh
 ```
 
-Betik sırasıyla PostgreSQL ve Redis'i başlatır, migration dosyalarını uygular,
+Betik sırasıyla PostgreSQL ve Redis'i başlatır, migration SQL dosyalarını doğrudan
+PostgreSQL container'ına aktararak uygular,
 Master Tenant/Admin seed işlemini çalıştırır, backend/frontend image'larını
 oluşturur, Nginx'i kurar ve Let's Encrypt sertifikasını ister.
 
