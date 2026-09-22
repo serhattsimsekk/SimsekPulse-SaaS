@@ -16,6 +16,7 @@ COPY api ./api
 COPY services ./services
 COPY app.py .
 COPY seed.py .
+COPY seed_mock_data.py .
 RUN mkdir -p /var/backups/simseklog && chown -R appuser:appuser /var/backups/simseklog
 
 USER appuser
