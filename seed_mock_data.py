@@ -77,8 +77,8 @@ def seed_mock_data() -> None:
             trip_id = db.execute(
                 text(
                     "INSERT INTO trips (tenant_id, customer_id, contract_id, vehicle_id, driver_id, route, status, planned_ton, realized_ton, started_at) "
-                    "SELECT :tenant, :customer, :contract, :vehicle, :driver, :route, :status, :planned, :realized, :started "
-                    "WHERE NOT EXISTS (SELECT 1 FROM trips WHERE tenant_id = :tenant AND route = :route AND started_at::date = CURRENT_DATE) RETURNING id"
+                    "SELECT CAST(:tenant AS uuid), CAST(:customer AS uuid), CAST(:contract AS uuid), CAST(:vehicle AS uuid), CAST(:driver AS uuid), CAST(:route AS varchar), CAST(:status AS varchar), CAST(:planned AS numeric), CAST(:realized AS numeric), CAST(:started AS timestamptz) "
+                    "WHERE NOT EXISTS (SELECT 1 FROM trips WHERE tenant_id = CAST(:tenant AS uuid) AND route = CAST(:route AS varchar) AND started_at::date = CURRENT_DATE) RETURNING id"
                 ),
                 {"tenant": tenant_id, "customer": customer_id, "contract": contract_id, "vehicle": vehicle_id, "driver": driver_id, "route": route, "status": status, "planned": planned, "realized": realized, "started": now - timedelta(hours=index * 3)},
             ).scalar_one_or_none()
