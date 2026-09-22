@@ -10,6 +10,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://simseklog:simseklog@db:5432/simseklog}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       JWT_SECRET: ${SECRET_KEY:?SECRET_KEY must be set}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-}
       REDIS_URL: redis://redis:6379/0
       BACKUP_DIR: /var/backups/simseklog
       ENABLE_SCHEDULED_JOBS: ${ENABLE_SCHEDULED_JOBS:-true}
