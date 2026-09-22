@@ -49,8 +49,8 @@ def seed_mock_data() -> None:
         customer_id = db.execute(
             text(
                 "INSERT INTO customers (tenant_id, name, tax_number, contact_name, contact_phone, address) "
-                "SELECT :tenant, 'Marmara Lojistik A.Ş.', '1111111111', 'Elif Çetin', '+90 212 000 0011', 'İstanbul' "
-                "WHERE NOT EXISTS (SELECT 1 FROM customers WHERE tenant_id = :tenant AND tax_number = '1111111111') RETURNING id"
+                "SELECT CAST(:tenant AS uuid), 'Marmara Lojistik A.Ş.', '1111111111', 'Elif Çetin', '+90 212 000 0011', 'İstanbul' "
+                "WHERE NOT EXISTS (SELECT 1 FROM customers WHERE tenant_id = CAST(:tenant AS uuid) AND tax_number = '1111111111') RETURNING id"
             ),
             {"tenant": tenant_id},
         ).scalar_one_or_none()
@@ -60,8 +60,8 @@ def seed_mock_data() -> None:
         contract_id = db.execute(
             text(
                 "INSERT INTO freight_contracts (tenant_id, customer_id, contract_no, route, unit_price_ton, status, valid_from) "
-                "SELECT :tenant, :customer, 'FRT-2026-001', 'Marmara Hatları', 1850, 'active', CURRENT_DATE "
-                "WHERE NOT EXISTS (SELECT 1 FROM freight_contracts WHERE tenant_id = :tenant AND contract_no = 'FRT-2026-001') RETURNING id"
+                "SELECT CAST(:tenant AS uuid), CAST(:customer AS uuid), 'FRT-2026-001', 'Marmara Hatları', 1850, 'active', CURRENT_DATE "
+                "WHERE NOT EXISTS (SELECT 1 FROM freight_contracts WHERE tenant_id = CAST(:tenant AS uuid) AND contract_no = 'FRT-2026-001') RETURNING id"
             ),
             {"tenant": tenant_id, "customer": customer_id},
         ).scalar_one_or_none()
@@ -90,8 +90,8 @@ def seed_mock_data() -> None:
             db.execute(
                 text(
                     "INSERT INTO telemetry_events (vehicle_id, recorded_at, latitude, longitude, speed_kmh, fuel_percent, engine_on) "
-                    "SELECT :vehicle, :recorded, :lat, :lng, :speed, :fuel, :engine "
-                    "WHERE NOT EXISTS (SELECT 1 FROM telemetry_events WHERE vehicle_id = :vehicle AND recorded_at::date = CURRENT_DATE)"
+                    "SELECT CAST(:vehicle AS uuid), CAST(:recorded AS timestamptz), CAST(:lat AS numeric), CAST(:lng AS numeric), CAST(:speed AS numeric), CAST(:fuel AS numeric), CAST(:engine AS boolean) "
+                    "WHERE NOT EXISTS (SELECT 1 FROM telemetry_events WHERE vehicle_id = CAST(:vehicle AS uuid) AND recorded_at::date = CURRENT_DATE)"
                 ),
                 {"vehicle": vehicle.id, "recorded": now, "lat": coords[0], "lng": coords[1], "speed": 52 if vehicle.plate != "06 SIM 002" else 0, "fuel": 64, "engine": vehicle.plate != "06 SIM 002"},
             )
@@ -99,8 +99,8 @@ def seed_mock_data() -> None:
         db.execute(
             text(
                 "INSERT INTO wait_events (trip_id, vehicle_id, location_type, location_name, started_at, free_minutes, rate_per_hour, demurrage_amount, status) "
-                "SELECT :trip, :vehicle, 'port', 'Ambarlı Limanı', :started, 120, 1850, 18500, 'open' "
-                "WHERE NOT EXISTS (SELECT 1 FROM wait_events WHERE vehicle_id = :vehicle AND location_name = 'Ambarlı Limanı' AND status = 'open')"
+                "SELECT CAST(:trip AS uuid), CAST(:vehicle AS uuid), 'port', 'Ambarlı Limanı', CAST(:started AS timestamptz), 120, 1850, 18500, 'open' "
+                "WHERE NOT EXISTS (SELECT 1 FROM wait_events WHERE vehicle_id = CAST(:vehicle AS uuid) AND location_name = 'Ambarlı Limanı' AND status = 'open')"
             ),
             {"tenant": tenant_id, "trip": trip_ids[0], "vehicle": vehicles[0].id, "started": now - timedelta(hours=4)},
         )
@@ -108,48 +108,48 @@ def seed_mock_data() -> None:
             db.execute(
                 text(
                     "INSERT INTO parts (tenant_id, sku, name, unit, stock_quantity, critical_quantity, unit_cost) "
-                    "SELECT :tenant, :sku, :name, 'adet', :stock, :critical, :cost "
-                    "WHERE NOT EXISTS (SELECT 1 FROM parts WHERE tenant_id = :tenant AND sku = :sku)"
+                    "SELECT CAST(:tenant AS uuid), CAST(:sku AS varchar), CAST(:name AS varchar), 'adet', CAST(:stock AS numeric), CAST(:critical AS numeric), CAST(:cost AS numeric) "
+                    "WHERE NOT EXISTS (SELECT 1 FROM parts WHERE tenant_id = CAST(:tenant AS uuid) AND sku = CAST(:sku AS varchar))"
                 ),
                 {"tenant": tenant_id, "sku": sku, "name": name, "stock": stock, "critical": critical, "cost": cost},
             )
         db.execute(
             text(
                 "INSERT INTO maintenance_issues (vehicle_id, reported_by_driver_id, category, urgency, parts_needed, estimated_cost, layup_days, status) "
-                "SELECT :vehicle, :driver, 'Lastik basıncı', 'high', '315/80 R22.5 lastik', 12500, 1, 'open' "
-                "WHERE NOT EXISTS (SELECT 1 FROM maintenance_issues WHERE vehicle_id = :vehicle AND category = 'Lastik basıncı' AND status = 'open')"
+                "SELECT CAST(:vehicle AS uuid), CAST(:driver AS uuid), 'Lastik basıncı', 'high', '315/80 R22.5 lastik', 12500, 1, 'open' "
+                "WHERE NOT EXISTS (SELECT 1 FROM maintenance_issues WHERE vehicle_id = CAST(:vehicle AS uuid) AND category = 'Lastik basıncı' AND status = 'open')"
             ),
             {"vehicle": vehicles[0].id, "driver": drivers[0]},
         )
         db.execute(
             text(
                 "INSERT INTO inspections (vehicle_id, inspection_type, due_date, status) "
-                "SELECT :vehicle, 'Muayene', CURRENT_DATE + 8, 'upcoming' "
-                "WHERE NOT EXISTS (SELECT 1 FROM inspections WHERE vehicle_id = :vehicle AND inspection_type = 'Muayene' AND due_date > CURRENT_DATE)"
+                "SELECT CAST(:vehicle AS uuid), 'Muayene', CURRENT_DATE + 8, 'upcoming' "
+                "WHERE NOT EXISTS (SELECT 1 FROM inspections WHERE vehicle_id = CAST(:vehicle AS uuid) AND inspection_type = 'Muayene' AND due_date > CURRENT_DATE)"
             ),
             {"vehicle": vehicles[1].id},
         )
         db.execute(
             text(
                 "INSERT INTO fuel_transactions (vehicle_id, driver_id, liters, unit_price, odometer_km, station, transaction_at) "
-                "SELECT :vehicle, :driver, 420, 47.25, 120450, 'Opet Gebze', :at "
-                "WHERE NOT EXISTS (SELECT 1 FROM fuel_transactions WHERE vehicle_id = :vehicle AND station = 'Opet Gebze' AND transaction_at::date = CURRENT_DATE)"
+                "SELECT CAST(:vehicle AS uuid), CAST(:driver AS uuid), 420, 47.25, 120450, 'Opet Gebze', CAST(:at AS timestamptz) "
+                "WHERE NOT EXISTS (SELECT 1 FROM fuel_transactions WHERE vehicle_id = CAST(:vehicle AS uuid) AND station = 'Opet Gebze' AND transaction_at::date = CURRENT_DATE)"
             ),
             {"vehicle": vehicles[0].id, "driver": drivers[0], "at": now},
         )
         db.execute(
             text(
                 "INSERT INTO expenses (tenant_id, trip_id, vehicle_id, category, amount, description, incurred_at) "
-                "SELECT :tenant, :trip, :vehicle, 'fuel', 19845, 'Örnek yakıt maliyeti', :at "
-                "WHERE NOT EXISTS (SELECT 1 FROM expenses WHERE tenant_id = :tenant AND description = 'Örnek yakıt maliyeti' AND incurred_at::date = CURRENT_DATE)"
+                "SELECT CAST(:tenant AS uuid), CAST(:trip AS uuid), CAST(:vehicle AS uuid), 'fuel', 19845, 'Örnek yakıt maliyeti', CAST(:at AS timestamptz) "
+                "WHERE NOT EXISTS (SELECT 1 FROM expenses WHERE tenant_id = CAST(:tenant AS uuid) AND description = 'Örnek yakıt maliyeti' AND incurred_at::date = CURRENT_DATE)"
             ),
             {"tenant": tenant_id, "trip": trip_ids[0], "vehicle": vehicles[0].id, "at": now},
         )
         db.execute(
             text(
                 "INSERT INTO notification_logs (tenant_id, user_id, channel, recipient, title, message, status) "
-                "SELECT :tenant, :user, 'system', 'admin@simseklog.com', 'Demuraj uyarısı', 'Ambarlı Limanı bekleme süresi aşıldı.', 'sent' "
-                "WHERE NOT EXISTS (SELECT 1 FROM notification_logs WHERE tenant_id = :tenant AND title = 'Demuraj uyarısı' AND created_at::date = CURRENT_DATE)"
+                "SELECT CAST(:tenant AS uuid), CAST(:user AS uuid), 'system', 'admin@simseklog.com', 'Demuraj uyarısı', 'Ambarlı Limanı bekleme süresi aşıldı.', 'sent' "
+                "WHERE NOT EXISTS (SELECT 1 FROM notification_logs WHERE tenant_id = CAST(:tenant AS uuid) AND title = 'Demuraj uyarısı' AND created_at::date = CURRENT_DATE)"
             ),
             {"tenant": tenant_id, "user": admin_id},
         )
