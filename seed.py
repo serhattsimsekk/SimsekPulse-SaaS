@@ -12,7 +12,7 @@ from services.security import hash_password
 def seed_master_admin() -> tuple[str, str, str, str]:
     tenant_code = os.getenv("MASTER_TENANT_CODE", "master")
     email = os.getenv("MASTER_ADMIN_EMAIL", "admin@simseklog.com")
-    password = os.getenv("MASTER_ADMIN_PASSWORD") or secrets.token_urlsafe(18)
+    password = os.getenv("ADMIN_SEED_PASSWORD") or os.getenv("MASTER_ADMIN_PASSWORD") or secrets.token_urlsafe(18)
     with SessionLocal() as db:
         tenant_id = db.execute(
             text("SELECT id::text FROM tenants WHERE code = :code"),
