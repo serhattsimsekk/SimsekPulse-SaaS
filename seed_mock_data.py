@@ -26,8 +26,8 @@ def seed_mock_data() -> None:
             driver_id = db.execute(
                 text(
                     "INSERT INTO drivers (tenant_id, employee_no, name, phone, shift, license_no, license_expiry, src_expiry) "
-                    "SELECT :tenant, :employee, :name, :phone, :shift, :license, CURRENT_DATE + 300, CURRENT_DATE + 180 "
-                    "WHERE NOT EXISTS (SELECT 1 FROM drivers WHERE tenant_id = :tenant AND employee_no = :employee) "
+                    "SELECT CAST(:tenant AS uuid), CAST(:employee AS varchar), CAST(:name AS varchar), CAST(:phone AS varchar), CAST(:shift AS varchar), CAST(:license AS varchar), CURRENT_DATE + 300, CURRENT_DATE + 180 "
+                    "WHERE NOT EXISTS (SELECT 1 FROM drivers WHERE tenant_id = CAST(:tenant AS uuid) AND employee_no = CAST(:employee AS varchar)) "
                     "RETURNING id"
                 ),
                 {"tenant": tenant_id, "employee": employee_no, "name": name, "phone": phone, "shift": shift, "license": f"LIC-{employee_no}"},
