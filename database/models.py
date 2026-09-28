@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from .base import Base
 
@@ -51,6 +51,7 @@ class User(TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     __table_args__ = (Index("ix_users_tenant_username", "tenant_id", "username", unique=True),)
+    company_id = synonym("tenant_id")
 
 
 class NotificationLog(TimestampMixin, Base):
@@ -63,16 +64,19 @@ class NotificationLog(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class BackupRun(TimestampMixin, Base):
     __tablename__ = "backup_runs"
+    tenant_id: Mapped[str | None] = mapped_column(ForeignKey("tenants.id"), index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     backup_type: Mapped[str] = mapped_column(String(30), nullable=False)
     destination: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     size_bytes: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class Driver(TimestampMixin, Base):
@@ -89,10 +93,12 @@ class Driver(TimestampMixin, Base):
     src_expiry: Mapped[date | None] = mapped_column(Date)
     penalty_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     blacklisted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class DriverDocument(TimestampMixin, Base):
     __tablename__ = "driver_documents"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
     document_type: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -100,10 +106,12 @@ class DriverDocument(TimestampMixin, Base):
     expires_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     document_uri: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="valid", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class DisciplineRecord(TimestampMixin, Base):
     __tablename__ = "discipline_records"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
     violation_type: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -111,10 +119,12 @@ class DisciplineRecord(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class TachographViolation(TimestampMixin, Base):
     __tablename__ = "tachograph_violations"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
     violation_type: Mapped[str] = mapped_column(String(80), nullable=False)
@@ -122,16 +132,19 @@ class TachographViolation(TimestampMixin, Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class RestBreak(TimestampMixin, Base):
     __tablename__ = "rest_breaks"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     duration_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     break_type: Mapped[str] = mapped_column(String(30), default="rest", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class ReceiptOcrRecord(TimestampMixin, Base):
@@ -148,6 +161,7 @@ class ReceiptOcrRecord(TimestampMixin, Base):
     extracted_data: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="processed", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class Vehicle(TimestampMixin, Base):
@@ -172,6 +186,7 @@ class Vehicle(TimestampMixin, Base):
     depreciation_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     sale_date: Mapped[date | None] = mapped_column(Date)
     sale_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    company_id = synonym("tenant_id")
 
 
 class Trailer(TimestampMixin, Base):
@@ -183,16 +198,19 @@ class Trailer(TimestampMixin, Base):
     capacity_ton: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     hex_color: Mapped[str | None] = mapped_column(String(7))
     status: Mapped[str] = mapped_column(String(30), default="available", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class VehicleTrailerAssignment(TimestampMixin, Base):
     __tablename__ = "vehicle_trailer_assignments"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     trailer_id: Mapped[str] = mapped_column(ForeignKey("trailers.id"), nullable=False, index=True)
     driver_id: Mapped[str | None] = mapped_column(ForeignKey("drivers.id"))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class Customer(TimestampMixin, Base):
@@ -204,6 +222,7 @@ class Customer(TimestampMixin, Base):
     contact_name: Mapped[str | None] = mapped_column(String(160))
     contact_phone: Mapped[str | None] = mapped_column(String(30))
     address: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class FreightContract(TimestampMixin, Base):
@@ -217,6 +236,7 @@ class FreightContract(TimestampMixin, Base):
     valid_from: Mapped[date] = mapped_column(Date, nullable=False)
     valid_to: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class CustomerFreightRate(TimestampMixin, Base):
@@ -230,6 +250,7 @@ class CustomerFreightRate(TimestampMixin, Base):
     valid_from: Mapped[date] = mapped_column(Date, nullable=False)
     valid_to: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class ContractorCommission(TimestampMixin, Base):
@@ -243,6 +264,7 @@ class ContractorCommission(TimestampMixin, Base):
     commission_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class Trip(TimestampMixin, Base):
@@ -260,20 +282,24 @@ class Trip(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(30), default="assigned", nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class DriverTask(TimestampMixin, Base):
     __tablename__ = "driver_tasks"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     trip_id: Mapped[str | None] = mapped_column(ForeignKey("trips.id"), index=True)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="assigned", nullable=False)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class ShiftHandover(TimestampMixin, Base):
     __tablename__ = "shift_handovers"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     driver_id: Mapped[str] = mapped_column(ForeignKey("drivers.id"), nullable=False, index=True)
@@ -285,6 +311,7 @@ class ShiftHandover(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
     approved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    company_id = synonym("tenant_id")
 
 
 class ShiftLog(TimestampMixin, Base):
@@ -302,6 +329,7 @@ class ShiftLog(TimestampMixin, Base):
     fuel_liters: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     distance_km: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     report_status: Mapped[str] = mapped_column(String(30), default="generated", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class WeighbridgeReceipt(TimestampMixin, Base):
@@ -321,10 +349,12 @@ class WeighbridgeReceipt(TimestampMixin, Base):
     confidence: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="matched", nullable=False)
     review_reason: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class Waybill(TimestampMixin, Base):
     __tablename__ = "waybills"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     trip_id: Mapped[str | None] = mapped_column(ForeignKey("trips.id"), index=True)
     customer_id: Mapped[str | None] = mapped_column(ForeignKey("customers.id"))
@@ -332,10 +362,12 @@ class Waybill(TimestampMixin, Base):
     cargo_ton: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     document_uri: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class WeighbridgeTicket(TimestampMixin, Base):
     __tablename__ = "weighbridge_tickets"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     trip_id: Mapped[str | None] = mapped_column(ForeignKey("trips.id"), index=True)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
@@ -349,10 +381,12 @@ class WeighbridgeTicket(TimestampMixin, Base):
     ocr_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     image_uri: Mapped[str | None] = mapped_column(Text)
     weighed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class WaitEvent(TimestampMixin, Base):
     __tablename__ = "wait_events"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     trip_id: Mapped[str | None] = mapped_column(ForeignKey("trips.id"), index=True)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
@@ -364,10 +398,12 @@ class WaitEvent(TimestampMixin, Base):
     rate_per_hour: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     demurrage_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class MaintenanceIssue(TimestampMixin, Base):
     __tablename__ = "maintenance_issues"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     reported_by_driver_id: Mapped[str | None] = mapped_column(ForeignKey("drivers.id"))
@@ -377,10 +413,12 @@ class MaintenanceIssue(TimestampMixin, Base):
     estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     layup_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class WorkOrder(TimestampMixin, Base):
     __tablename__ = "work_orders"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     issue_id: Mapped[str | None] = mapped_column(ForeignKey("maintenance_issues.id"))
@@ -389,6 +427,7 @@ class WorkOrder(TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), default="planned", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class Part(TimestampMixin, Base):
@@ -401,19 +440,23 @@ class Part(TimestampMixin, Base):
     stock_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     critical_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    company_id = synonym("tenant_id")
 
 
 class PartMovement(TimestampMixin, Base):
     __tablename__ = "part_movements"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     part_id: Mapped[str] = mapped_column(ForeignKey("parts.id"), nullable=False, index=True)
     work_order_id: Mapped[str | None] = mapped_column(ForeignKey("work_orders.id"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class Inspection(TimestampMixin, Base):
     __tablename__ = "inspections"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     inspection_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -421,6 +464,7 @@ class Inspection(TimestampMixin, Base):
     due_odometer_km: Mapped[int | None] = mapped_column(Integer)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), default="upcoming", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class AssetDocument(TimestampMixin, Base):
@@ -434,10 +478,12 @@ class AssetDocument(TimestampMixin, Base):
     expires_on: Mapped[date] = mapped_column(Date, nullable=False)
     document_uri: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="valid", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class FuelTransaction(TimestampMixin, Base):
     __tablename__ = "fuel_transactions"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     driver_id: Mapped[str | None] = mapped_column(ForeignKey("drivers.id"))
@@ -447,10 +493,12 @@ class FuelTransaction(TimestampMixin, Base):
     station: Mapped[str | None] = mapped_column(String(160))
     receipt_uri: Mapped[str | None] = mapped_column(Text)
     transaction_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class TelemetryEvent(TimestampMixin, Base):
     __tablename__ = "telemetry_events"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
@@ -460,6 +508,7 @@ class TelemetryEvent(TimestampMixin, Base):
     fuel_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     engine_on: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     payload: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class Geofence(TimestampMixin, Base):
@@ -469,10 +518,12 @@ class Geofence(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     geometry_wkt: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class GeofenceEvent(TimestampMixin, Base):
     __tablename__ = "geofence_events"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     geofence_id: Mapped[str] = mapped_column(ForeignKey("geofences.id"), nullable=False, index=True)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
@@ -480,10 +531,12 @@ class GeofenceEvent(TimestampMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    company_id = synonym("tenant_id")
 
 
 class Tire(TimestampMixin, Base):
     __tablename__ = "tires"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     position: Mapped[str] = mapped_column(String(30), nullable=False)
@@ -491,6 +544,7 @@ class Tire(TimestampMixin, Base):
     brand: Mapped[str | None] = mapped_column(String(80))
     tread_mm: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class TireIncident(TimestampMixin, Base):
@@ -508,6 +562,7 @@ class TireIncident(TimestampMixin, Base):
     model: Mapped[str | None] = mapped_column(String(80))
     damage_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class RoadsideAssistanceLog(TimestampMixin, Base):
@@ -523,6 +578,7 @@ class RoadsideAssistanceLog(TimestampMixin, Base):
     response_minutes: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(30), default="completed", nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class FuelAnomaly(TimestampMixin, Base):
@@ -537,6 +593,7 @@ class FuelAnomaly(TimestampMixin, Base):
     actual_liters: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     details: Mapped[str | None] = mapped_column(Text)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class CustomerTrackingLink(TimestampMixin, Base):
@@ -547,6 +604,7 @@ class CustomerTrackingLink(TimestampMixin, Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class TireRotation(TimestampMixin, Base):
@@ -559,10 +617,12 @@ class TireRotation(TimestampMixin, Base):
     to_position: Mapped[str] = mapped_column(String(30), nullable=False)
     rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     odometer_km: Mapped[int | None] = mapped_column(Integer)
+    company_id = synonym("tenant_id")
 
 
 class Incident(TimestampMixin, Base):
     __tablename__ = "incidents"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     vehicle_id: Mapped[str] = mapped_column(ForeignKey("vehicles.id"), nullable=False, index=True)
     driver_id: Mapped[str | None] = mapped_column(ForeignKey("drivers.id"))
@@ -572,6 +632,7 @@ class Incident(TimestampMixin, Base):
     repair_cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     layup_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class Subcontractor(TimestampMixin, Base):
@@ -583,16 +644,19 @@ class Subcontractor(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(String(30))
     current_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class SupplierSettlement(TimestampMixin, Base):
     __tablename__ = "supplier_settlements"
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     subcontractor_id: Mapped[str] = mapped_column(ForeignKey("subcontractors.id"), nullable=False, index=True)
     trip_id: Mapped[str | None] = mapped_column(ForeignKey("trips.id"))
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending", nullable=False)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class Expense(TimestampMixin, Base):
@@ -606,6 +670,7 @@ class Expense(TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), default="TRY", nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     incurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class Bid(TimestampMixin, Base):
@@ -618,6 +683,7 @@ class Bid(TimestampMixin, Base):
     proposed_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    company_id = synonym("tenant_id")
 
 
 class AuditLog(TimestampMixin, Base):
@@ -629,6 +695,7 @@ class AuditLog(TimestampMixin, Base):
     entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_id: Mapped[str | None] = mapped_column(String(36))
     payload: Mapped[str | None] = mapped_column(Text)
+    company_id = synonym("tenant_id")
 
 
 class SpreadsheetWorkbook(TimestampMixin, Base):
@@ -640,6 +707,7 @@ class SpreadsheetWorkbook(TimestampMixin, Base):
     workbook_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     protection_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    company_id = synonym("tenant_id")
 
 
 class SpreadsheetChange(TimestampMixin, Base):
@@ -652,3 +720,4 @@ class SpreadsheetChange(TimestampMixin, Base):
     cell_ref: Mapped[str] = mapped_column(String(30), nullable=False)
     value_json: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    company_id = synonym("tenant_id")

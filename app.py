@@ -1,10 +1,19 @@
+import logging
 import os
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+# .env dosyasını (varsa) diğer modüller os.getenv() ile ortam
+# değişkenlerini okumadan önce yükle; hem docker-compose hem de yerel
+# `python -m uvicorn` / baslat.bat ile çalıştırmada aynı davranışı sağlar.
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from seed import seed_master_admin
 from api.routes.finance import router as finance_router
 from api.routes.compliance import router as compliance_router
 from api.routes.operations import router as operations_router
@@ -21,11 +30,26 @@ from api.routes.shifts import router as shifts_router
 from api.routes.assets import router as assets_router
 from api.routes.field_operations import router as field_operations_router
 
+logger = logging.getLogger("simseklog.startup")
 scheduler = BackgroundScheduler(timezone="UTC")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Kurucu (master admin) hesabının veritabanında her zaman var, aktif ve
+    # ADMIN_SEED_PASSWORD/MASTER_ADMIN_PASSWORD ile senkron olmasını garanti eder.
+    # Şifre doğrulaması normal şekilde hash_password/verify_password üzerinden
+    # yapılır; bu, hiçbir doğrulamayı atlamaz.
+    if os.getenv("SEED_MASTER_ADMIN", "true").lower() == "true":
+        try:
+            tenant_id, tenant_code, email, _ = seed_master_admin()
+            logger.info(
+                "Master admin hesabı doğrulandı/oluşturuldu: tenant=%s email=%s",
+                tenant_code,
+                email,
+            )
+        except Exception:
+            logger.exception("Master admin seed işlemi başarısız oldu.")
     if os.getenv("ENABLE_SCHEDULED_JOBS", "true").lower() == "true":
         scheduler.add_job(run_database_backup, "cron", hour=int(os.getenv("BACKUP_HOUR_UTC", "2")), minute=0, id="daily-backup", replace_existing=True)
         scheduler.add_job(generate_shift_reports, "cron", hour="0,8,16", minute=0, id="shift-reports", replace_existing=True)

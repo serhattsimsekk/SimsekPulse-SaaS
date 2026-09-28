@@ -193,6 +193,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             db.commit()
             raise HTTPException(403, "Master bootstrap tenant bulunamadı.")
 
+        # `users` tablosundaki RLS politikası, doğrulanmış tenant_id işlem-yerel
+        # olarak set edilmeden sorgulandığında satırı görünmez kılar (bkz. normal
+        # login akışındaki aynı gerekçe).
+        db.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": tenant_id},
+        )
+
         user = db.execute(
             text("""
                 SELECT id::text, tenant_id::text, role, department, password_hash
@@ -233,9 +241,11 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     # ============ NORMAL LOGIN FLOW ============
     tenant_id = payload.tenant_id
     if not tenant_id and payload.tenant_code:
+        # Şirket kodu karşılaştırması büyük/küçük harf ve baştaki/sondaki
+        # boşluk farklarından etkilenmemeli.
         tenant_id = db.execute(
             text("SELECT id::text FROM tenants WHERE LOWER(code) = LOWER(:code) AND is_active = true LIMIT 1"),
-            {"code": payload.tenant_code},
+            {"code": payload.tenant_code.strip()},
         ).scalar_one_or_none()
 
     if not tenant_id:
@@ -244,6 +254,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     username = payload.email or payload.username
     if not username:
         raise HTTPException(422, "E-posta veya kullanıcı adı zorunludur.")
+    username = username.strip()
 
     tenant = db.execute(
         text("""
@@ -258,6 +269,16 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         _log_auth_event(db, tenant_id, None, "login_failure", username, username, ip_address, user_agent, {"reason": "tenant_inactive"}, "failure")
         db.commit()
         raise HTTPException(403, "Şirket hesabı aktif bir lisansa sahip değil.")
+
+    # `users` tablosunda tenant_id bazlı Row-Level Security politikası var.
+    # Kimlik doğrulamadan önce (JWT/istek bağlamı olmadan) bu oturum için
+    # Postgres tarafında "app.tenant_id" ayarlanmazsa RLS, şifre doğru olsa
+    # dahi satırı görünmez kılar. Bu yüzden sorgudan önce doğrulanmış
+    # tenant_id'yi işlem-yerel (is_local=true) olarak açıkça set ediyoruz.
+    db.execute(
+        text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+        {"tenant_id": tenant_id},
+    )
 
     row = db.execute(
         text("""

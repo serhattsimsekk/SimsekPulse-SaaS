@@ -29,6 +29,17 @@ def seed_master_admin() -> tuple[str, str, str, str]:
                 "UPDATE tenants SET is_active = true, subscription_status = 'active' "
                 "WHERE id = CAST(:tenant_id AS uuid)"
             ), {"tenant_id": tenant_id})
+        # `users` tablosunda tenant_id bazlı Row-Level Security politikası
+        # var (bkz. database/migrations/001_initial_schema.sql). Bu betik
+        # herhangi bir HTTP isteği/JWT bağlamı olmadan çalıştığından
+        # "app.tenant_id" Postgres oturum değişkeni hiç ayarlanmaz; bu da
+        # RLS'nin INSERT/UPDATE'i sessizce engellemesine (WITH CHECK ihlali)
+        # yol açar. Bu yüzden ilgili tenant için işlem-yerel olarak açıkça
+        # set ediyoruz.
+        db.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": tenant_id},
+        )
         db.execute(text(
             "INSERT INTO users (tenant_id, name, username, role, department, password_hash, is_active) "
             "VALUES (CAST(:tenant_id AS uuid), :name, :username, 'super_admin', 'executive', :password_hash, true) "
@@ -47,6 +58,12 @@ def seed_simulator_vehicles(tenant_id: str) -> None:
         ("41 SIM 004", "Marmara", "SIM-MAR-004"),
     ]
     with SessionLocal() as db:
+        # Bu, ayrı bir oturum/işlem olduğu için "app.tenant_id" burada da
+        # ayrıca ayarlanmalı (yukarıdaki açıklamayla aynı RLS gerekçesi).
+        db.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": tenant_id},
+        )
         for plate, status, device_no in vehicles:
             db.execute(text(
                 "INSERT INTO vehicles (tenant_id, plate, vehicle_type, brand, model, device_no, status, "
@@ -59,6 +76,9 @@ def seed_simulator_vehicles(tenant_id: str) -> None:
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()
     tenant_id, tenant_code, email, password = seed_master_admin()
     print("MASTER_TENANT_ID=" + tenant_id)
     print("MASTER_TENANT_CODE=" + tenant_code)
