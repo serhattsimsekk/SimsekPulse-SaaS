@@ -721,3 +721,24 @@ class SpreadsheetChange(TimestampMixin, Base):
     value_json: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     company_id = synonym("tenant_id")
+
+
+class ShipmentStatusLog(TimestampMixin, Base):
+    """Kargo/sevkiyatın durum geçmişini (konum + zaman damgalı) tutar.
+
+    Not: Projede henüz ayrı bir "shipments" tablosu bulunmadığından
+    shipment_id, dış sistemden veya trip/waybill akışından gelen bir
+    kimliği (opak string) tutar; sıkı bir foreign key kısıtlaması yoktur.
+    Şoför kaydı (driver_id) mevcut "drivers" tablosuna referans verir.
+    """
+
+    __tablename__ = "shipment_status_logs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    shipment_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    driver_id: Mapped[str | None] = mapped_column(ForeignKey("drivers.id"), index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    __table_args__ = (Index("ix_shipment_status_logs_tenant_shipment", "tenant_id", "shipment_id"),)
+    company_id = synonym("tenant_id")
