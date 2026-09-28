@@ -1,9 +1,32 @@
-const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// `NEXT_PUBLIC_API_URL` Next.js tarafından DERLEME zamanında (next build)
+// sabit bir metin olarak koda gömülür (bkz. frontend/Dockerfile ARG/ENV).
+// Eğer bu değişken .env.production içinde tanımlanmamış/boş bırakılırsa,
+// eskiden buraya sabit "http://localhost:8000" varsayılanı yazılıyordu.
+// Prodüksiyonda bu, ziyaretçinin KENDİ tarayıcısından kendi bilgisayarındaki
+// (localhost) 8000 portuna istek atmaya çalışmasına yol açar — orada hiçbir
+// şey dinlemediği için istek asla backend'e ulaşmaz ve giriş formu "Giriş
+// yapılıyor..." durumunda sonsuza kadar takılı kalır (ya da anlaşılmaz bir
+// ağ hatası verir). nginx zaten "/api/" yolunu aynı alan adı (domain)
+// üzerinden backend'e proxy'lediğinden, prodüksiyonda değişken boşsa
+// GÖRECELİ (relative, aynı origin) bir taban kullanmak çok daha güvenlidir;
+// yerel geliştirmede ise (NODE_ENV !== "production") eski localhost:8000
+// varsayılanı korunur.
+const rawBase = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/+$/, "");
+const base = rawBase || (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("simseklog_access_token") : null;
   const headers = { ...(options?.headers || {}), ...(token ? { Authorization: "Bearer " + token } : {}) };
-  const res = await fetch(`${base}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, { ...options, headers });
+  } catch (networkError) {
+    // fetch() CORS/DNS/bağlantı hatalarında bir Response DEĞİL, bir istisna
+    // fırlatır. Bunu açıkça yakalayıp anlaşılır bir hataya çeviriyoruz;
+    // aksi halde çağıran taraf (ör. login formu) neyin yanlış gittiğini
+    // hiç bilmeden sonsuza kadar "yükleniyor" durumunda kalabilir.
+    throw new Error(`Sunucuya bağlanılamadı (${base}${path}): ${(networkError as Error).message}`);
+  }
   if (res.status === 401 && typeof window !== "undefined") {
     window.localStorage.removeItem("simseklog_access_token");
     window.localStorage.removeItem("simseklog_principal");

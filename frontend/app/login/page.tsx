@@ -1,12 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
 import { Logo } from "../../components/logo";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ tenant_code: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,11 +16,26 @@ export default function LoginPage() {
     setError("");
     try {
       const token = await api.login(form);
+      if (!token?.access_token) {
+        throw new Error("Sunucudan geçersiz oturum yanıtı alındı.");
+      }
       localStorage.setItem("simseklog_access_token", token.access_token);
       localStorage.setItem("simseklog_principal", JSON.stringify({ tenant_id: token.tenant_id, tenant_code: form.tenant_code, role: token.role, department: token.department, email: form.email, logo_data: brandLogo }));
-      router.replace("/");
-    } catch {
-      setError("Şirket kodu, e-posta veya şifre hatalı; şirket lisansı aktif olmayabilir.");
+      // Next.js'in istemci-taraflı `router.replace` gezinmesi yerine sabit
+      // (hard) bir sayfa yönlendirmesi kullanıyoruz: bu, tarayıcıyı gerçek
+      // bir sayfa yüklemesine zorlar ve Home bileşeninin localStorage'daki
+      // taze token'ı sıfırdan okumasını garanti eder. Aksi halde, bazı
+      // istemci-taraflı gezinme/önbellek senaryolarında kullanıcı, token
+      // aslında doğru kaydedilmiş olsa bile giriş ekranında "takılı" kalmış
+      // gibi görünebiliyordu.
+      window.location.assign("/");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setError(
+        message.startsWith("Sunucuya bağlanılamadı")
+          ? "Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
+          : "Şirket kodu, e-posta veya şifre hatalı; şirket lisansı aktif olmayabilir."
+      );
     } finally {
       setBusy(false);
     }
