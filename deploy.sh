@@ -26,8 +26,13 @@ fi
 
 $COMPOSE up -d --build db redis
 $COMPOSE exec -T db pg_isready -U simseklog -d simseklog
-$COMPOSE exec -T db psql -v ON_ERROR_STOP=1 -U simseklog -d simseklog < database/migrations/001_initial_schema.sql
-$COMPOSE exec -T db psql -v ON_ERROR_STOP=1 -U simseklog -d simseklog < database/migrations/002_arvento_credentials.sql
+# database/migrations/ altındaki tüm .sql dosyalarını dosya adına göre
+# (001, 002, ...) sırayla uygular; yeni migration eklendiğinde bu betiğin
+# güncellenmesi gerekmez.
+for migration in $(find database/migrations -maxdepth 1 -name '*.sql' | sort); do
+  echo "Applying migration: ${migration}"
+  $COMPOSE exec -T db psql -v ON_ERROR_STOP=1 -U simseklog -d simseklog < "$migration"
+done
 $COMPOSE run --rm api python seed.py
 $COMPOSE up -d --build api frontend
 
