@@ -125,6 +125,11 @@ ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS sale_date date;
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS sale_amount numeric(14,2);
 CREATE TABLE IF NOT EXISTS fuel_transactions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vehicle_id uuid NOT NULL REFERENCES vehicles(id), driver_id uuid REFERENCES drivers(id), liters numeric(12,3) NOT NULL, unit_price numeric(12,3) NOT NULL, odometer_km integer, station varchar(160), receipt_uri text, transaction_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS telemetry_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vehicle_id uuid NOT NULL REFERENCES vehicles(id), recorded_at timestamptz NOT NULL, latitude numeric(10,7), longitude numeric(10,7), speed_kmh numeric(8,2), fuel_percent numeric(5,2), engine_on boolean NOT NULL DEFAULT false, payload text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+-- "tires", aşağıdaki tyre_incidents/tire_rotations tarafından tire_id FK ile
+-- referans verildiğinden bu tablolardan ÖNCE oluşturulmalıdır (daha önce bu
+-- dosyada tires, tyre_incidents'tan SONRA tanımlanmıştı ve migration
+-- "relation \"tires\" does not exist" hatasıyla başarısız oluyordu).
+CREATE TABLE IF NOT EXISTS tires (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vehicle_id uuid NOT NULL REFERENCES vehicles(id), position varchar(30) NOT NULL, serial_no varchar(80), brand varchar(80), tread_mm numeric(6,2), status varchar(30) NOT NULL DEFAULT 'active', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS tyre_incidents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
     vehicle_id uuid NOT NULL REFERENCES vehicles(id), driver_id uuid REFERENCES drivers(id),
@@ -161,15 +166,6 @@ CREATE TABLE IF NOT EXISTS tire_rotations (
 );
 CREATE TABLE IF NOT EXISTS geofences (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id), name varchar(120) NOT NULL, geometry_wkt text NOT NULL, is_active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS geofence_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), geofence_id uuid NOT NULL REFERENCES geofences(id), vehicle_id uuid NOT NULL REFERENCES vehicles(id), event_type varchar(30) NOT NULL, occurred_at timestamptz NOT NULL, latitude numeric(10,7), longitude numeric(10,7), created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS tires (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vehicle_id uuid NOT NULL REFERENCES vehicles(id), position varchar(30) NOT NULL, serial_no varchar(80), brand varchar(80), tread_mm numeric(6,2), status varchar(30) NOT NULL DEFAULT 'active', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS tyre_incidents (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id),
-    vehicle_id uuid NOT NULL REFERENCES vehicles(id), driver_id uuid REFERENCES drivers(id),
-    trailer_id uuid REFERENCES trailers(id), tire_id uuid REFERENCES tires(id), route varchar(240),
-    location varchar(240), cause varchar(50) NOT NULL DEFAULT 'unknown', brand varchar(80),
-    model varchar(80), damage_cost numeric(14,2) NOT NULL DEFAULT 0, occurred_at timestamptz NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
-);
 CREATE TABLE IF NOT EXISTS incidents (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vehicle_id uuid NOT NULL REFERENCES vehicles(id), driver_id uuid REFERENCES drivers(id), incident_type varchar(50) NOT NULL, occurred_at timestamptz NOT NULL, description text NOT NULL, repair_cost numeric(14,2), layup_days integer NOT NULL DEFAULT 0, status varchar(30) NOT NULL DEFAULT 'open', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS subcontractors (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id), name varchar(160) NOT NULL, tax_number varchar(20), phone varchar(30), current_balance numeric(14,2) NOT NULL DEFAULT 0, status varchar(30) NOT NULL DEFAULT 'active', created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS supplier_settlements (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), subcontractor_id uuid NOT NULL REFERENCES subcontractors(id), trip_id uuid REFERENCES trips(id), amount numeric(14,2) NOT NULL, status varchar(30) NOT NULL DEFAULT 'pending', paid_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
