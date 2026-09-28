@@ -14,6 +14,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY database ./database
 COPY api ./api
 COPY services ./services
+COPY scripts ./scripts
 COPY app.py .
 COPY seed.py .
 COPY seed_mock_data.py .

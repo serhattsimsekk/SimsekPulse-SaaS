@@ -10,12 +10,12 @@ from services.security import hash_password
 
 
 def seed_master_admin() -> tuple[str, str, str, str]:
-    tenant_code = os.getenv("MASTER_TENANT_CODE", "master")
-    email = os.getenv("MASTER_ADMIN_EMAIL", "admin@simseklog.com")
+    tenant_code = os.getenv("MASTER_TENANT_CODE", "master").strip().lower()
+    email = os.getenv("MASTER_ADMIN_EMAIL", "admin@simseklog.com").strip().lower()
     password = os.getenv("ADMIN_SEED_PASSWORD") or os.getenv("MASTER_ADMIN_PASSWORD") or secrets.token_urlsafe(18)
     with SessionLocal() as db:
         tenant_id = db.execute(
-            text("SELECT id::text FROM tenants WHERE code = :code"),
+            text("SELECT id::text FROM tenants WHERE LOWER(code) = :code"),
             {"code": tenant_code},
         ).scalar_one_or_none()
         if tenant_id is None:
@@ -40,10 +40,19 @@ def seed_master_admin() -> tuple[str, str, str, str]:
             text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
             {"tenant_id": tenant_id},
         )
+        # Her uygulama başlangıcında (app.py lifespan) çalıştığından, bu
+        # INSERT/ON CONFLICT DO UPDATE hem hesabı oluşturur hem de daha
+        # önce (ör. hatalı giriş denemeleri yüzünden) kilitlenmiş olabilecek
+        # hesabı otomatik olarak açar ve şifreyi her zaman .env'deki
+        # ADMIN_SEED_PASSWORD ile senkron tutar; böylece master admin girişi
+        # manuel bir script/komut çalıştırmaya gerek kalmadan kendi kendini
+        # onarır.
         db.execute(text(
-            "INSERT INTO users (tenant_id, name, username, role, department, password_hash, is_active) "
-            "VALUES (CAST(:tenant_id AS uuid), :name, :username, 'super_admin', 'executive', :password_hash, true) "
-            "ON CONFLICT (tenant_id, username) DO UPDATE SET role = 'super_admin', department = 'executive', is_active = true, password_hash = :password_hash"
+            "INSERT INTO users (tenant_id, name, username, role, department, password_hash, is_active, "
+            "failed_login_attempts, locked_until) "
+            "VALUES (CAST(:tenant_id AS uuid), :name, :username, 'super_admin', 'executive', :password_hash, true, 0, NULL) "
+            "ON CONFLICT (tenant_id, username) DO UPDATE SET role = 'super_admin', department = 'executive', "
+            "is_active = true, password_hash = :password_hash, failed_login_attempts = 0, locked_until = NULL"
         ), {"tenant_id": tenant_id, "name": "SaaS Master Admin", "username": email, "password_hash": hash_password(password)})
         db.commit()
         seed_simulator_vehicles(tenant_id)
