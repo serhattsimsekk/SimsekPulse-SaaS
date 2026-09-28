@@ -25,6 +25,17 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     future=True,
+    # Postgres ulaşılamaz/yanıt vermez (ör. yanlış host, güvenlik duvarı
+    # paketleri sessizce düşürüyor) durumunda psycopg varsayılan olarak
+    # işletim sisteminin TCP zaman aşımına kadar (dakikalarca, bazen hiç)
+    # bekleyebilir. Bu da API isteklerinin (ör. /login) tarayıcıda hiçbir
+    # hata vermeden sonsuza dek "yükleniyor" gibi görünmesine yol açar.
+    # "connect_timeout" ile bağlantı kurma denemesini makul bir sürede
+    # (10 sn) anlamlı bir hataya çeviriyoruz.
+    connect_args={"connect_timeout": 10},
+    # Havuzdaki tüm bağlantılar meşgulse yeni bir istek en fazla 10 saniye
+    # bekler, sonra TimeoutError fırlatır; sonsuza dek askıda kalmaz.
+    pool_timeout=10,
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 

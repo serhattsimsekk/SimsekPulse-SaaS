@@ -17,15 +17,31 @@ const base = rawBase || (process.env.NODE_ENV === "production" ? "" : "http://lo
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? window.localStorage.getItem("simseklog_access_token") : null;
   const headers = { ...(options?.headers || {}), ...(token ? { Authorization: "Bearer " + token } : {}) };
+  // Tarayıcının fetch() API'si VARSAYILAN olarak hiçbir zaman aman
+  // (timeout) uygulamaz; sunucu/proxy yanıt vermeden askıda kalırsa istek
+  // sonsuza dek "pending" kalır ve kullanıcı arayüzde (ör. giriş formunda)
+  // hiçbir hata görmeden ekranda takılı kalmış gibi görünür. Bunu önlemek
+  // için AbortController ile 20 saniyelik açık bir istek zaman aşımı
+  // uyguluyoruz; süre dolarsa anlaşılır bir hata fırlatılır.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20_000);
   let res: Response;
   try {
-    res = await fetch(`${base}${path}`, { ...options, headers });
+    res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
   } catch (networkError) {
-    // fetch() CORS/DNS/bağlantı hatalarında bir Response DEĞİL, bir istisna
-    // fırlatır. Bunu açıkça yakalayıp anlaşılır bir hataya çeviriyoruz;
-    // aksi halde çağıran taraf (ör. login formu) neyin yanlış gittiğini
-    // hiç bilmeden sonsuza kadar "yükleniyor" durumunda kalabilir.
-    throw new Error(`Sunucuya bağlanılamadı (${base}${path}): ${(networkError as Error).message}`);
+    // fetch() CORS/DNS/bağlantı hatalarında (ve iptal/timeout durumunda)
+    // bir Response DEĞİL, bir istisna fırlatır. Bunu açıkça yakalayıp
+    // anlaşılır bir hataya çeviriyoruz; aksi halde çağıran taraf (ör.
+    // login formu) neyin yanlış gittiğini hiç bilmeden sonsuza kadar
+    // "yükleniyor" durumunda kalabilir.
+    const isTimeout = networkError instanceof DOMException && networkError.name === "AbortError";
+    throw new Error(
+      isTimeout
+        ? `Sunucu 20 saniye içinde yanıt vermedi (${base}${path}). Sunucu tarafında bir sorun olabilir.`
+        : `Sunucuya bağlanılamadı (${base}${path}): ${(networkError as Error).message}`
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
   if (res.status === 401 && typeof window !== "undefined") {
     window.localStorage.removeItem("simseklog_access_token");

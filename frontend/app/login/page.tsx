@@ -31,11 +31,13 @@ export default function LoginPage() {
       window.location.assign("/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
-      setError(
-        message.startsWith("Sunucuya bağlanılamadı")
-          ? "Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin."
-          : "Şirket kodu, e-posta veya şifre hatalı; şirket lisansı aktif olmayabilir."
-      );
+      if (message.startsWith("Sunucuya bağlanılamadı")) {
+        setError("Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.");
+      } else if (message.startsWith("Sunucu 20 saniye içinde yanıt vermedi")) {
+        setError("Sunucu yanıt vermiyor (zaman aşımı). Lütfen daha sonra tekrar deneyin veya sistem yöneticisiyle iletişime geçin.");
+      } else {
+        setError("Şirket kodu, e-posta veya şifre hatalı; şirket lisansı aktif olmayabilir.");
+      }
     } finally {
       setBusy(false);
     }
