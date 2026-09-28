@@ -203,7 +203,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
         user = db.execute(
             text("""
-                SELECT id::text, tenant_id::text, role, department, password_hash
+                SELECT id::text, tenant_id::text, username, role, department, password_hash
                 FROM users
                 WHERE LOWER(username) = LOWER(:username)
                   AND tenant_id::text = :tenant_id
@@ -282,7 +282,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
     row = db.execute(
         text("""
-            SELECT id::text, tenant_id::text, role, department, password_hash, failed_login_attempts, locked_until
+            SELECT id::text, tenant_id::text, username, role, department, password_hash, failed_login_attempts, locked_until
             FROM users
             WHERE tenant_id::text = :tenant_id
               AND LOWER(username) = LOWER(:username)
